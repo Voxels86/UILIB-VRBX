@@ -87,7 +87,7 @@ local function create(className, props, children)
 end
 
 local function addCorner(parent, radius)
-    return create("UICorner", { CornerRadius = UDim.new(0, radius or 10), Parent = parent })
+    return nil
 end
 
 local function addStroke(parent, color, transparency)
@@ -207,7 +207,7 @@ local function makeCard(self, parent, title, searchText, height)
         TextColor3 = theme.Text,
         TextSize = 13,
         Font = Enum.Font.GothamMedium,
-        Size = UDim2.new(1, -22, 0, 20),
+        Size = UDim2.new(1, -150, 0, 20),
         Position = UDim2.fromOffset(10, 7),
         Parent = card
     })
@@ -247,8 +247,8 @@ function VRBX:CreateWindow(options)
     local shadow = create("Frame", {
         Name = "Shadow",
         BackgroundColor3 = Color3.new(0, 0, 0),
-        BackgroundTransparency = 0.55,
-        Position = offsetUDim2(pos, 0, 8),
+        BackgroundTransparency = 1,
+        Position = pos,
         Size = size,
         BorderSizePixel = 0,
         Parent = gui
@@ -358,8 +358,8 @@ function VRBX:CreateWindow(options)
         Name = "Sidebar",
         BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 0.55,
-        Position = UDim2.fromOffset(8, 54),
-        Size = UDim2.new(0, 146, 1, -62),
+        Position = UDim2.fromOffset(12, 58),
+        Size = UDim2.new(0, 144, 1, -70),
         BorderSizePixel = 0,
         Parent = main
     })
@@ -381,8 +381,8 @@ function VRBX:CreateWindow(options)
     local pages = create("Frame", {
         Name = "Pages",
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(164, 54),
-        Size = UDim2.new(1, -172, 1, -62),
+        Position = UDim2.fromOffset(168, 58),
+        Size = UDim2.new(1, -180, 1, -70),
         BorderSizePixel = 0,
         Parent = main
     })
@@ -457,7 +457,7 @@ function VRBX:CreateWindow(options)
             local delta = input.Position - dragStart
             local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
             main.Position = newPos
-            shadow.Position = offsetUDim2(newPos, 0, 8)
+            shadow.Position = newPos
         end
     end)
 
@@ -528,7 +528,13 @@ function Window:CreateTab(options)
         SortOrder = Enum.SortOrder.LayoutOrder,
         Parent = page
     })
-    create("UIPadding", { PaddingRight = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6), Parent = page })
+    create("UIPadding", {
+        PaddingTop = UDim.new(0, 0),
+        PaddingLeft = UDim.new(0, 0),
+        PaddingRight = UDim.new(0, 0),
+        PaddingBottom = UDim.new(0, 0),
+        Parent = page
+    })
     bind(self.Connections, layout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
         page.CanvasSize = UDim2.fromOffset(0, layout.AbsoluteContentSize.Y + 10)
     end)
@@ -742,8 +748,8 @@ function Tab:CreateButton(options)
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.Accent,
-        Size = UDim2.fromOffset(82, 26),
-        Position = UDim2.new(1, -92, 0, 9),
+        Size = UDim2.fromOffset(72, 26),
+        Position = UDim2.new(1, -82, 0, 9),
         Parent = card
     })
     addCorner(btn, 8)
@@ -876,8 +882,8 @@ function Tab:CreateDropdown(options)
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.fromOffset(130, 26),
-        Position = UDim2.new(1, -140, 0, 9),
+        Size = UDim2.fromOffset(120, 26),
+        Position = UDim2.new(1, -130, 0, 9),
         Parent = card
     })
     addCorner(btn, 8)
@@ -951,8 +957,8 @@ function Tab:CreateTextbox(options)
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.fromOffset(160, 28),
-        Position = UDim2.new(1, -170, 0, 9),
+        Size = UDim2.fromOffset(150, 28),
+        Position = UDim2.new(1, -160, 0, 9),
         BorderSizePixel = 0,
         Parent = card
     })
@@ -984,8 +990,8 @@ function Tab:CreateKeybind(options)
         TextColor3 = theme.Text,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.fromOffset(110, 26),
-        Position = UDim2.new(1, -120, 0, 9),
+        Size = UDim2.fromOffset(104, 26),
+        Position = UDim2.new(1, -114, 0, 9),
         Parent = card
     })
     addCorner(btn, 8)
