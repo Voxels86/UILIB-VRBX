@@ -100,6 +100,11 @@ local function addStroke(parent, color, transparency)
     })
 end
 
+local function trackTheme(self, obj, props)
+    table.insert(self.ThemeObjects, { Object = obj, Props = props })
+    return obj
+end
+
 local function tween(obj, props, time)
     local tw = Services.TweenService:Create(obj, TweenInfo.new(time or 0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
     tw:Play()
@@ -175,6 +180,9 @@ local function makeTextButton(props)
     props.Font = props.Font or Enum.Font.Gotham
     props.TextSize = props.TextSize or 13
     props.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Left
+    props.TextYAlignment = props.TextYAlignment or Enum.TextYAlignment.Center
+    props.TextWrapped = props.TextWrapped == nil and true or props.TextWrapped
+    props.TextTruncate = props.TextTruncate or Enum.TextTruncate.AtEnd
     props.BorderSizePixel = 0
     return create("TextButton", props)
 end
@@ -183,9 +191,119 @@ local function makeTextLabel(props)
     props.Font = props.Font or Enum.Font.Gotham
     props.TextSize = props.TextSize or 13
     props.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Left
+    props.TextYAlignment = props.TextYAlignment or Enum.TextYAlignment.Center
+    props.TextWrapped = props.TextWrapped == nil and true or props.TextWrapped
+    props.TextTruncate = props.TextTruncate or Enum.TextTruncate.AtEnd
     props.BackgroundTransparency = props.BackgroundTransparency == nil and 1 or props.BackgroundTransparency
     props.BorderSizePixel = 0
     return create("TextLabel", props)
+end
+
+local function fitText(instance, minSize, maxSize)
+    instance.TextScaled = true
+    local constraint = create("UITextSizeConstraint", {
+        MinTextSize = minSize or 10,
+        MaxTextSize = maxSize or instance.TextSize or 13,
+        Parent = instance
+    })
+    return constraint
+end
+
+local function rightControl(props, width, height, inset)
+    props.AnchorPoint = Vector2.new(1, 0.5)
+    props.Position = UDim2.new(1, -(inset or 10), 0.5, 0)
+    props.Size = UDim2.new(0, width, 0, height)
+    return props
+end
+
+local function shade(color, amount)
+    return Color3.new(
+        math.clamp(color.R + amount, 0, 1),
+        math.clamp(color.G + amount, 0, 1),
+        math.clamp(color.B + amount, 0, 1)
+    )
+end
+
+local function addButtonFeedback(connections, button, normalColor, hoverColor, pressColor, getNormalColor)
+    local hovering = false
+    local pressed = false
+    local function currentNormal()
+        return getNormalColor and getNormalColor() or normalColor
+    end
+    bind(connections, button.MouseEnter, function()
+        hovering = true
+        if not pressed then
+            tween(button, { BackgroundColor3 = hoverColor or shade(currentNormal(), 0.06) }, 0.08)
+        end
+    end)
+    bind(connections, button.MouseLeave, function()
+        hovering = false
+        pressed = false
+        tween(button, { BackgroundColor3 = currentNormal() }, 0.08)
+    end)
+    bind(connections, button.MouseButton1Down, function()
+        pressed = true
+        tween(button, { BackgroundColor3 = pressColor or shade(currentNormal(), -0.05) }, 0.06)
+    end)
+    bind(connections, button.MouseButton1Up, function()
+        pressed = false
+        tween(button, { BackgroundColor3 = hovering and (hoverColor or shade(currentNormal(), 0.06)) or currentNormal() }, 0.08)
+    end)
+end
+
+local function attachTooltip(window, target, text)
+    if not text or text == "" then return end
+    local tip
+    bind(window.Connections, target.MouseEnter, function()
+        local theme = window.Theme
+        tip = create("Frame", {
+            BackgroundColor3 = theme.Surface,
+            BackgroundTransparency = 0.02,
+            BorderSizePixel = 0,
+            Size = UDim2.fromOffset(210, 34),
+            ZIndex = 50,
+            Parent = window.Gui
+        })
+        trackTheme(window, tip, { BackgroundColor3 = "Surface" })
+        trackTheme(window, addStroke(tip, theme.Stroke, 0.2), { Color = "Stroke" })
+        local label = makeTextLabel({
+            Text = tostring(text),
+            TextColor3 = theme.Text,
+            TextSize = 12,
+            TextWrapped = true,
+            Size = UDim2.new(1, -12, 1, -8),
+            Position = UDim2.fromOffset(6, 4),
+            ZIndex = 51,
+            Parent = tip
+        })
+        trackTheme(window, label, { TextColor3 = "Text" })
+        local mouse = Services.UserInputService:GetMouseLocation()
+        tip.Position = UDim2.fromOffset(mouse.X + 12, mouse.Y + 12)
+    end)
+    bind(window.Connections, target.MouseMoved, function(x, y)
+        if tip and tip.Parent then
+            tip.Position = UDim2.fromOffset(x + 12, y + 12)
+        end
+    end)
+    bind(window.Connections, target.MouseLeave, function()
+        if tip then
+            tip:Destroy()
+            tip = nil
+        end
+    end)
+end
+
+local function elementHandle(instance, extra)
+    local handle = extra or {}
+    handle.Instance = instance
+    function handle:Visible(value)
+        instance.Visible = value ~= false
+        return self
+    end
+    function handle:Destroy()
+        if instance then instance:Destroy() end
+    end
+    return handle
 end
 
 local function makeCard(self, parent, title, searchText, height)
@@ -194,12 +312,13 @@ local function makeCard(self, parent, title, searchText, height)
         Name = "ElementCard",
         BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 0.18,
-        Size = UDim2.new(1, 0, 0, height or 44),
+        Size = UDim2.new(1, -16, 0, height or 44),
         BorderSizePixel = 0,
         Parent = parent
     })
+    trackTheme(self.Window, card, { BackgroundColor3 = "Surface" })
     addCorner(card, 9)
-    addStroke(card, theme.Stroke, 0.35)
+    trackTheme(self.Window, addStroke(card, theme.Stroke, 0.35), { Color = "Stroke" })
 
     local label = makeTextLabel({
         Name = "Title",
@@ -207,12 +326,18 @@ local function makeCard(self, parent, title, searchText, height)
         TextColor3 = theme.Text,
         TextSize = 13,
         Font = Enum.Font.GothamMedium,
-        Size = UDim2.new(1, -150, 0, 20),
-        Position = UDim2.fromOffset(10, 7),
+        AnchorPoint = Vector2.new(0, 0.5),
+        Size = UDim2.new(1, -148, 0, 22),
+        Position = UDim2.fromOffset(10, 22),
         Parent = card
     })
+    trackTheme(self.Window, label, { TextColor3 = "Text" })
+    fitText(label, 10, 13)
 
     table.insert(self.Window.Searchables, { Frame = card, Text = string.lower(searchText or title or "") })
+    if title then
+        self.ElementMap[string.lower(tostring(title))] = card
+    end
     return card, label
 end
 
@@ -231,7 +356,10 @@ function VRBX:CreateWindow(options)
         Gui = gui,
         Theme = theme,
         Tabs = {},
+        TabMap = {},
+        ThemeObjects = {},
         Flags = {},
+        Defaults = {},
         FlagSetters = {},
         Searchables = {},
         Connections = {},
@@ -265,8 +393,9 @@ function VRBX:CreateWindow(options)
         ClipsDescendants = true,
         Parent = gui
     })
+    trackTheme(self, main, { BackgroundColor3 = "Background" })
     addCorner(main, 16)
-    addStroke(main, theme.Stroke, 0.05)
+    trackTheme(self, addStroke(main, theme.Stroke, 0.05), { Color = "Stroke" })
 
     local topbar = create("Frame", {
         Name = "Topbar",
@@ -277,6 +406,7 @@ function VRBX:CreateWindow(options)
         BorderSizePixel = 0,
         Parent = main
     })
+    trackTheme(self, topbar, { BackgroundColor3 = "Surface" })
 
     local title = makeTextLabel({
         Name = "WindowTitle",
@@ -288,6 +418,7 @@ function VRBX:CreateWindow(options)
         Position = UDim2.fromOffset(12, 0),
         Parent = topbar
     })
+    trackTheme(self, title, { TextColor3 = "Text" })
 
     local search = create("TextBox", {
         Name = "Search",
@@ -303,27 +434,13 @@ function VRBX:CreateWindow(options)
         BackgroundTransparency = 0.18,
         BorderSizePixel = 0,
         Size = UDim2.new(0, 170, 0, 28),
-        Position = UDim2.new(1, -276, 0, 8),
+        Position = UDim2.new(1, -252, 0, 8),
         Parent = topbar
     })
+    trackTheme(self, search, { TextColor3 = "Text", PlaceholderColor3 = "Muted", BackgroundColor3 = "SurfaceLight" })
     addCorner(search, 8)
-    addStroke(search, theme.Stroke, 0.35)
+    trackTheme(self, addStroke(search, theme.Stroke, 0.35), { Color = "Stroke" })
     create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 8), Parent = search })
-
-    local configBtn = makeTextButton({
-        Name = "ConfigButton",
-        Text = "CFG",
-        TextColor3 = theme.Muted,
-        TextSize = 12,
-        Font = Enum.Font.GothamBold,
-        TextXAlignment = Enum.TextXAlignment.Center,
-        BackgroundColor3 = theme.SurfaceLight,
-        BackgroundTransparency = 0.18,
-        Size = UDim2.fromOffset(34, 28),
-        Position = UDim2.new(1, -100, 0, 8),
-        Parent = topbar
-    })
-    addCorner(configBtn, 8)
 
     local minBtn = makeTextButton({
         Name = "Minimize",
@@ -335,9 +452,10 @@ function VRBX:CreateWindow(options)
         BackgroundColor3 = theme.SurfaceLight,
         BackgroundTransparency = 0.18,
         Size = UDim2.fromOffset(28, 28),
-        Position = UDim2.new(1, -62, 0, 8),
+        Position = UDim2.new(1, -66, 0, 8),
         Parent = topbar
     })
+    trackTheme(self, minBtn, { TextColor3 = "Text", BackgroundColor3 = "SurfaceLight" })
     addCorner(minBtn, 8)
 
     local closeBtn = makeTextButton({
@@ -349,9 +467,10 @@ function VRBX:CreateWindow(options)
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.Danger,
         Size = UDim2.fromOffset(28, 28),
-        Position = UDim2.new(1, -30, 0, 8),
+        Position = UDim2.new(1, -34, 0, 8),
         Parent = topbar
     })
+    trackTheme(self, closeBtn, { TextColor3 = "Text", BackgroundColor3 = "Danger" })
     addCorner(closeBtn, 8)
 
     local sidebar = create("Frame", {
@@ -363,8 +482,9 @@ function VRBX:CreateWindow(options)
         BorderSizePixel = 0,
         Parent = main
     })
+    trackTheme(self, sidebar, { BackgroundColor3 = "Surface" })
     addCorner(sidebar, 10)
-    addStroke(sidebar, theme.Stroke, 0.55)
+    trackTheme(self, addStroke(sidebar, theme.Stroke, 0.55), { Color = "Stroke" })
 
     local tabList = create("UIListLayout", {
         Padding = UDim.new(0, 4),
@@ -413,6 +533,7 @@ function VRBX:CreateWindow(options)
         BorderSizePixel = 0,
         Parent = main
     })
+    trackTheme(self, resizeHandle, { BackgroundColor3 = "Muted" })
     addCorner(resizeHandle, 5)
 
     self.Main = main
@@ -463,6 +584,7 @@ function VRBX:CreateWindow(options)
 
     local resizing, resizeStart, startSize
     bind(self.Connections, resizeHandle.InputBegan, function(input)
+        if self.Minimized then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             resizing = true
             resizeStart = input.Position
@@ -475,10 +597,10 @@ function VRBX:CreateWindow(options)
         end
     end)
     bind(self.Connections, Services.UserInputService.InputChanged, function(input)
-        if resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        if resizing and not self.Minimized and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - resizeStart
-            local w = math.max(480, startSize.X + delta.X)
-            local h = math.max(300, startSize.Y + delta.Y)
+            local w = math.max(560, startSize.X + delta.X)
+            local h = math.max(320, startSize.Y + delta.Y)
             main.Size = UDim2.fromOffset(w, h)
             shadow.Size = main.Size
             normalSize = main.Size
@@ -488,20 +610,27 @@ function VRBX:CreateWindow(options)
     bind(self.Connections, minBtn.MouseButton1Click, function()
         self.Minimized = not self.Minimized
         if self.Minimized then
+            resizing = false
+            sidebar.Visible = false
+            pages.Visible = false
+            resizeHandle.Visible = false
             tween(main, { Size = UDim2.fromOffset(main.AbsoluteSize.X, 44) }, 0.16)
             tween(shadow, { Size = UDim2.fromOffset(main.AbsoluteSize.X, 44) }, 0.16)
         else
             tween(main, { Size = normalSize }, 0.16)
             tween(shadow, { Size = normalSize }, 0.16)
+            task.delay(0.16, function()
+                if not self.Minimized and main.Parent then
+                    sidebar.Visible = true
+                    pages.Visible = true
+                    resizeHandle.Visible = true
+                end
+            end)
         end
     end)
 
     bind(self.Connections, closeBtn.MouseButton1Click, function()
         self:Destroy()
-    end)
-
-    bind(self.Connections, configBtn.MouseButton1Click, function()
-        self:Notify({ Title = "Config", Content = "Use Window:SaveConfig(name) and Window:LoadConfig(name).", Duration = 3 })
     end)
 
     return self
@@ -510,7 +639,7 @@ end
 function Window:CreateTab(options)
     options = type(options) == "table" and options or { Name = tostring(options or "Tab") }
     local theme = self.Theme
-    local tab = setmetatable({ Window = self, Name = options.Name or "Tab", Elements = {} }, Tab)
+    local tab = setmetatable({ Window = self, Name = options.Name or "Tab", Elements = {}, SectionMap = {}, ElementMap = {} }, Tab)
 
     local page = create("ScrollingFrame", {
         Name = tab.Name,
@@ -525,6 +654,7 @@ function Window:CreateTab(options)
     })
     local layout = create("UIListLayout", {
         Padding = UDim.new(0, 8),
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
         SortOrder = Enum.SortOrder.LayoutOrder,
         Parent = page
     })
@@ -550,12 +680,15 @@ function Window:CreateTab(options)
         Size = UDim2.new(1, 0, 0, 32),
         Parent = self.Sidebar
     })
+    trackTheme(self, button, { BackgroundColor3 = "SurfaceLight" })
     addCorner(button, 8)
     create("UIPadding", { PaddingLeft = UDim.new(0, 10), Parent = button })
 
     tab.Page = page
     tab.Button = button
+    tab.Layout = layout
     table.insert(self.Tabs, tab)
+    self.TabMap[string.lower(tab.Name)] = tab
 
     bind(self.Connections, button.MouseButton1Click, function()
         self:SelectTab(tab)
@@ -569,6 +702,10 @@ function Window:CreateTab(options)
 end
 
 function Window:SelectTab(tab)
+    if type(tab) == "string" then
+        tab = self.TabMap[string.lower(tab)]
+    end
+    if not tab then return nil end
     for _, item in ipairs(self.Tabs) do
         local active = item == tab
         item.Page.Visible = active
@@ -578,11 +715,63 @@ function Window:SelectTab(tab)
         }, 0.1)
     end
     self.CurrentTab = tab
+    return tab
+end
+
+function Window:ScrollTo(target)
+    if not self.CurrentTab or not target or not target.Parent then return false end
+    local page = self.CurrentTab.Page
+    local y = target.AbsolutePosition.Y - page.AbsolutePosition.Y + page.CanvasPosition.Y
+    page.CanvasPosition = Vector2.new(0, math.max(0, y - 6))
+    return true
+end
+
+function Window:OpenTab(tabName, targetName)
+    local tab = self:SelectTab(tabName)
+    if not tab then return false end
+    if targetName then
+        local key = string.lower(tostring(targetName))
+        local target = tab.SectionMap[key] or tab.ElementMap[key]
+        if target then
+            task.defer(function()
+                self:ScrollTo(target)
+            end)
+        end
+    end
+    return true
+end
+
+function Window:SetTheme(theme)
+    self.Theme = normalizeTheme(theme)
+    for _, item in ipairs(self.ThemeObjects) do
+        local obj = item.Object
+        if obj and obj.Parent then
+            for prop, key in pairs(item.Props) do
+                obj[prop] = self.Theme[key]
+            end
+        end
+    end
+    if self.CurrentTab then
+        self:SelectTab(self.CurrentTab)
+    end
+    return true
+end
+
+function Window:SetVisible(value)
+    local visible = value ~= false
+    self.Main.Visible = visible
+    self.Shadow.Visible = visible
+    return visible
+end
+
+function Window:Toggle()
+    return self:SetVisible(not self.Main.Visible)
 end
 
 function Window:RegisterFlag(flag, default, setter)
     if flag then
         self.Flags[flag] = default
+        self.Defaults[flag] = default
         self.FlagSetters[flag] = setter
     end
 end
@@ -592,6 +781,39 @@ function Window:SetFlag(flag, value)
     if self.FlagSetters[flag] then
         self.FlagSetters[flag](value, true)
     end
+end
+
+function Window:ResetFlag(flag)
+    if self.Defaults[flag] ~= nil then
+        self:SetFlag(flag, self.Defaults[flag])
+        return true
+    end
+    return false
+end
+
+function Window:ResetAll()
+    for flag, value in pairs(self.Defaults) do
+        self:SetFlag(flag, value)
+    end
+    return true
+end
+
+function Window:ListConfigs()
+    if not listfiles or not isfolder or not isfolder("VRBX") then
+        return {}
+    end
+    local configs = {}
+    for _, path in ipairs(listfiles("VRBX")) do
+        local name = tostring(path):match("([^/\\]+)%.json$")
+        if name then table.insert(configs, name) end
+    end
+    table.sort(configs)
+    return configs
+end
+
+function Window:AutoLoadConfig(name)
+    local ok = self:LoadConfig(name or self.Name)
+    return ok
 end
 
 function Window:SaveConfig(name)
@@ -687,10 +909,11 @@ function Tab:CreateSection(title)
     local holder = create("Frame", {
         Name = "Section",
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 22),
+        Size = UDim2.new(1, -16, 0, 22),
         Parent = self.Page
     })
     makeTextLabel({
+        Name = "SectionTitle",
         Text = tostring(title or "Section"),
         TextColor3 = theme.Accent,
         Font = Enum.Font.GothamBold,
@@ -699,26 +922,35 @@ function Tab:CreateSection(title)
         Size = UDim2.new(1, -4, 0, 20),
         Parent = holder
     })
+    local sectionTitle = holder:FindFirstChild("SectionTitle")
+    if sectionTitle then
+        trackTheme(self.Window, sectionTitle, { TextColor3 = "Accent" })
+    end
     table.insert(self.Window.Searchables, { Frame = holder, Text = string.lower(tostring(title or "section")) })
-    return holder
+    self.SectionMap[string.lower(tostring(title or "section"))] = holder
+    return elementHandle(holder)
 end
 
 function Tab:CreateLabel(options)
     options = type(options) == "table" and options or { Text = tostring(options or "Label") }
     local card, label = makeCard(self, self.Page, options.Text or "Label", options.Text or "Label", 36)
-    label.Position = UDim2.fromOffset(10, 8)
-    return {
-        Instance = card,
+    label.AnchorPoint = Vector2.new(0, 0)
+    label.Size = UDim2.new(1, -20, 1, -12)
+    label.Position = UDim2.fromOffset(10, 6)
+    return elementHandle(card, {
         Set = function(_, text)
             label.Text = tostring(text)
         end
-    }
+    })
 end
 
 function Tab:CreateParagraph(options)
     options = options or {}
     local theme = self.Window.Theme
     local card, label = makeCard(self, self.Page, options.Title or "Paragraph", (options.Title or "") .. " " .. (options.Content or ""), 74)
+    label.AnchorPoint = Vector2.new(0, 0)
+    label.Position = UDim2.fromOffset(10, 7)
+    label.Size = UDim2.new(1, -20, 0, 18)
     local body = makeTextLabel({
         Text = tostring(options.Content or options.Text or ""),
         TextColor3 = theme.Muted,
@@ -728,37 +960,66 @@ function Tab:CreateParagraph(options)
         Size = UDim2.new(1, -20, 1, -34),
         Parent = card
     })
-    return {
-        Instance = card,
+    fitText(body, 10, 13)
+    return elementHandle(card, {
         Set = function(_, titleText, bodyText)
             label.Text = tostring(titleText or label.Text)
             body.Text = tostring(bodyText or body.Text)
         end
-    }
+    })
 end
 
 function Tab:CreateButton(options)
     options = options or {}
     local theme = self.Window.Theme
+    local flag = options.Flag or options.Name or options.Title or "Button"
+    local toggleMode = options.Toggle == true or options.Stateful == true
+    local state = not not options.Default
     local card, label = makeCard(self, self.Page, options.Name or options.Title or "Button", options.Name or options.Title or "Button", 44)
-    local btn = makeTextButton({
+    local function buttonColor()
+        return self.Window.Theme.Accent
+    end
+    local btn = makeTextButton(rightControl({
         Text = options.ButtonText or "Run",
         TextColor3 = theme.AccentText,
         Font = Enum.Font.GothamBold,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Center,
-        BackgroundColor3 = theme.Accent,
-        Size = UDim2.fromOffset(72, 26),
-        Position = UDim2.new(1, -82, 0, 9),
+        BackgroundColor3 = buttonColor(),
         Parent = card
-    })
+    }, 72, 26, 10))
+    trackTheme(self.Window, btn, { BackgroundColor3 = "Accent", TextColor3 = "AccentText" })
+    fitText(btn, 9, 12)
+    addButtonFeedback(self.Window.Connections, btn, theme.Accent, nil, nil, buttonColor)
+    attachTooltip(self.Window, card, options.Tooltip)
     addCorner(btn, 8)
+    local function set(value, silent)
+        state = not not value
+        self.Window.Flags[flag] = state
+        tween(btn, {
+            BackgroundColor3 = buttonColor(),
+            TextColor3 = self.Window.Theme.AccentText
+        }, 0.08)
+        if not silent and options.Callback then
+            task.spawn(options.Callback, state)
+        end
+    end
     bind(self.Window.Connections, btn.MouseButton1Click, function()
-        if options.Callback then
+        if toggleMode then
+            set(not state)
+        elseif options.Callback then
             task.spawn(options.Callback)
         end
     end)
-    return { Instance = card, Button = btn, SetText = function(_, text) label.Text = tostring(text) end }
+    if toggleMode then
+        self.Window:RegisterFlag(flag, state, set)
+    end
+    return elementHandle(card, {
+        Button = btn,
+        SetText = function(_, text) label.Text = tostring(text) end,
+        Set = function(_, value) if toggleMode then set(value) end end,
+        Get = function() return toggleMode and state or nil end
+    })
 end
 
 function Tab:CreateToggle(options)
@@ -768,13 +1029,17 @@ function Tab:CreateToggle(options)
     local flag = options.Flag or name
     local state = not not options.Default
     local card, label = makeCard(self, self.Page, name, name, 44)
-    local track = makeTextButton({
+    local track = makeTextButton(rightControl({
         Text = "",
         BackgroundColor3 = state and theme.Accent or theme.SurfaceLight,
-        Size = UDim2.fromOffset(42, 22),
-        Position = UDim2.new(1, -52, 0, 11),
         Parent = card
-    })
+    }, 42, 22, 10))
+    attachTooltip(self.Window, card, options.Tooltip)
+    trackTheme(self.Window, track, { BackgroundColor3 = state and "Accent" or "SurfaceLight" })
+    addButtonFeedback(self.Window.Connections, track, state and theme.Accent or theme.SurfaceLight, nil, nil, function()
+        local currentTheme = self.Window.Theme
+        return state and currentTheme.Accent or currentTheme.SurfaceLight
+    end)
     addCorner(track, 12)
     local knob = create("Frame", {
         BackgroundColor3 = theme.Text,
@@ -783,17 +1048,25 @@ function Tab:CreateToggle(options)
         BorderSizePixel = 0,
         Parent = track
     })
+    trackTheme(self.Window, knob, { BackgroundColor3 = "Text" })
     addCorner(knob, 9)
     local function set(value, silent)
         state = not not value
         self.Window.Flags[flag] = state
-        tween(track, { BackgroundColor3 = state and theme.Accent or theme.SurfaceLight }, 0.12)
+        local currentTheme = self.Window.Theme
+        for _, item in ipairs(self.Window.ThemeObjects) do
+            if item.Object == track then
+                item.Props.BackgroundColor3 = state and "Accent" or "SurfaceLight"
+                break
+            end
+        end
+        tween(track, { BackgroundColor3 = state and currentTheme.Accent or currentTheme.SurfaceLight }, 0.12)
         tween(knob, { Position = state and UDim2.fromOffset(23, 3) or UDim2.fromOffset(3, 3) }, 0.12)
         if not silent and options.Callback then task.spawn(options.Callback, state) end
     end
     bind(self.Window.Connections, track.MouseButton1Click, function() set(not state) end)
     self.Window:RegisterFlag(flag, state, set)
-    return { Instance = card, Set = function(_, value) set(value) end, Get = function() return state end }
+    return elementHandle(card, { Set = function(_, value) set(value) end, Get = function() return state end })
 end
 
 function Tab:CreateSlider(options)
@@ -810,16 +1083,22 @@ function Tab:CreateSlider(options)
     if increment <= 0 then
         increment = 1
     end
+    local precision = tostring(increment):match("%.(%d+)")
+    precision = precision and #precision or 0
     local value = math.clamp(options.Default or min, min, max)
     local card, label = makeCard(self, self.Page, name, name, 56)
+    attachTooltip(self.Window, card, options.Tooltip)
     local valueLabel = makeTextLabel({
         Text = tostring(value),
         TextColor3 = theme.Muted,
         TextXAlignment = Enum.TextXAlignment.Right,
-        Position = UDim2.new(1, -80, 0, 7),
-        Size = UDim2.fromOffset(70, 20),
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -10, 0, 7),
+        Size = UDim2.fromOffset(64, 18),
         Parent = card
     })
+    trackTheme(self.Window, valueLabel, { TextColor3 = "Muted" })
+    fitText(valueLabel, 9, 12)
     local bar = makeTextButton({
         Text = "",
         BackgroundColor3 = theme.SurfaceLight,
@@ -827,17 +1106,32 @@ function Tab:CreateSlider(options)
         Size = UDim2.new(1, -20, 0, 7),
         Parent = card
     })
+    trackTheme(self.Window, bar, { BackgroundColor3 = "SurfaceLight" })
+    addButtonFeedback(self.Window.Connections, bar, theme.SurfaceLight, nil, nil, function()
+        return self.Window.Theme.SurfaceLight
+    end)
     addCorner(bar, 4)
     local fill = create("Frame", { BackgroundColor3 = theme.Accent, Size = UDim2.fromScale(0, 1), BorderSizePixel = 0, Parent = bar })
+    trackTheme(self.Window, fill, { BackgroundColor3 = "Accent" })
     addCorner(fill, 4)
     local dragging = false
     local function round(num)
-        return math.floor((num / increment) + 0.5) * increment
+        local rounded = math.floor((num / increment) + 0.5) * increment
+        local multiplier = 10 ^ precision
+        return math.floor((rounded * multiplier) + 0.5) / multiplier
+    end
+    local function formatValue(num)
+        if precision <= 0 then
+            return tostring(math.floor(num + 0.5))
+        end
+        local text = string.format("%." .. precision .. "f", num)
+        text = text:gsub("(%..-)0+$", "%1"):gsub("%.$", "")
+        return text
     end
     local function set(newValue, silent)
         value = math.clamp(round(newValue), min, max)
         local alpha = max == min and 1 or (value - min) / (max - min)
-        valueLabel.Text = tostring(value)
+        valueLabel.Text = formatValue(value)
         fill.Size = UDim2.fromScale(alpha, 1)
         self.Window.Flags[flag] = value
         if not silent and options.Callback then task.spawn(options.Callback, value) end
@@ -865,7 +1159,7 @@ function Tab:CreateSlider(options)
     end)
     self.Window:RegisterFlag(flag, value, set)
     set(value, true)
-    return { Instance = card, Set = function(_, v) set(v) end, Get = function() return value end }
+    return elementHandle(card, { Set = function(_, v) set(v) end, Get = function() return value end })
 end
 
 function Tab:CreateDropdown(options)
@@ -875,30 +1169,97 @@ function Tab:CreateDropdown(options)
     local flag = options.Flag or name
     local values = options.Options or options.Values or {}
     local value = options.Default or values[1]
+    local dropdownWidth = options.Width or 180
+    local rowHeight = 24
+    local maxVisibleOptions = options.MaxVisibleOptions or 5
+    local maxOptionsHeight = options.MaxHeight or (rowHeight * maxVisibleOptions)
     local card, label = makeCard(self, self.Page, name, name, 44)
+    attachTooltip(self.Window, card, options.Tooltip)
+    label.Size = UDim2.new(1, -(dropdownWidth + 28), 0, 22)
     local btn = makeTextButton({
         Text = tostring(value or "Select"),
         TextColor3 = theme.Text,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.fromOffset(120, 26),
-        Position = UDim2.new(1, -130, 0, 9),
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -10, 0, 9),
+        Size = UDim2.fromOffset(dropdownWidth, 26),
+        ZIndex = 3,
         Parent = card
     })
+    trackTheme(self.Window, btn, { TextColor3 = "Text", BackgroundColor3 = "SurfaceLight" })
+    fitText(btn, 9, 12)
+    addButtonFeedback(self.Window.Connections, btn, theme.SurfaceLight, nil, nil, function()
+        return self.Window.Theme.SurfaceLight
+    end)
     addCorner(btn, 8)
     local list = create("Frame", {
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.new(1, 0, 0, 0),
-        Position = UDim2.fromOffset(0, 44),
+        AnchorPoint = Vector2.new(1, 0),
+        Size = UDim2.fromOffset(dropdownWidth, 0),
+        Position = UDim2.new(1, -10, 0, 44),
         BorderSizePixel = 0,
         ClipsDescendants = true,
+        ZIndex = 2,
         Parent = card
     })
+    trackTheme(self.Window, list, { BackgroundColor3 = "SurfaceLight" })
     addCorner(list, 9)
-    local layout = create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = list })
+    local searchBox = create("TextBox", {
+        Text = "",
+        PlaceholderText = "Search...",
+        ClearTextOnFocus = false,
+        TextColor3 = theme.Text,
+        PlaceholderColor3 = theme.Muted,
+        Font = Enum.Font.Gotham,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        BackgroundColor3 = theme.Surface,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, -8, 0, 24),
+        Position = UDim2.fromOffset(4, 4),
+        ZIndex = 3,
+        Parent = list
+    })
+    trackTheme(self.Window, searchBox, { TextColor3 = "Text", PlaceholderColor3 = "Muted", BackgroundColor3 = "Surface" })
+    fitText(searchBox, 9, 11)
+    create("UIPadding", { PaddingLeft = UDim.new(0, 7), PaddingRight = UDim.new(0, 7), Parent = searchBox })
+    local optionsHolder = create("ScrollingFrame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(0, 32),
+        Size = UDim2.new(1, 0, 0, 0),
+        CanvasSize = UDim2.fromOffset(0, 0),
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = theme.Accent,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+        ZIndex = 3,
+        Parent = list
+    })
+    local layout = create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = optionsHolder
+    })
+    bind(self.Window.Connections, layout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+        optionsHolder.CanvasSize = UDim2.fromOffset(0, layout.AbsoluteContentSize.Y)
+    end)
     local open = false
     local optionConnections = {}
+    local filteredValues = values
+    local pointerInsideDropdown = false
+    local suppressNextToggle = false
+    local function setPageScrolling(enabled)
+        if self.Page and self.Page.Parent then
+            self.Page.ScrollingEnabled = enabled
+        end
+    end
+    local function isInside(instance, point)
+        local pos = instance.AbsolutePosition
+        local size = instance.AbsoluteSize
+        return point.X >= pos.X and point.X <= pos.X + size.X and point.Y >= pos.Y and point.Y <= pos.Y + size.Y
+    end
     local function set(newValue, silent)
         value = newValue
         btn.Text = tostring(newValue or "Select")
@@ -907,38 +1268,228 @@ function Tab:CreateDropdown(options)
     end
     local function setOpen(state)
         open = state
-        local h = open and math.min(#values * 26, 130) or 0
-        tween(card, { Size = UDim2.new(1, 0, 0, 44 + h) }, 0.12)
-        tween(list, { Size = UDim2.new(1, 0, 0, h) }, 0.12)
+        pointerInsideDropdown = false
+        setPageScrolling(true)
+        local optionsHeight = math.min(#filteredValues * rowHeight, maxOptionsHeight)
+        local h = open and (32 + optionsHeight) or 0
+        tween(card, { Size = UDim2.new(1, -16, 0, 48 + h) }, 0.12)
+        tween(list, { Size = UDim2.fromOffset(dropdownWidth, h) }, 0.12)
+        tween(optionsHolder, { Size = UDim2.new(1, 0, 0, optionsHeight) }, 0.12)
+        if open then
+            searchBox.Text = ""
+            optionsHolder.CanvasPosition = Vector2.new(0, 0)
+        else
+            searchBox:ReleaseFocus()
+        end
     end
-    local function rebuild(newValues)
+    local function rebuildOptions(query)
         disconnectAll(optionConnections)
-        for _, child in ipairs(list:GetChildren()) do
+        for _, child in ipairs(optionsHolder:GetChildren()) do
             if child:IsA("TextButton") then
                 child:Destroy()
             end
         end
-        values = newValues or values
+        query = string.lower(query or "")
+        filteredValues = {}
         for _, item in ipairs(values) do
+            if query == "" or string.find(string.lower(tostring(item)), query, 1, true) then
+                table.insert(filteredValues, item)
+            end
+        end
+        for _, item in ipairs(filteredValues) do
             local opt = makeTextButton({
                 Text = tostring(item),
                 TextColor3 = theme.Muted,
                 TextXAlignment = Enum.TextXAlignment.Center,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 26),
-                Parent = list
+                BackgroundColor3 = theme.SurfaceLight,
+                BackgroundTransparency = 0,
+                Size = UDim2.new(1, -2, 0, rowHeight),
+                ZIndex = 3,
+                Parent = optionsHolder
             })
+            trackTheme(self.Window, opt, { TextColor3 = "Muted", BackgroundColor3 = "SurfaceLight" })
+            fitText(opt, 9, 12)
+            addButtonFeedback(optionConnections, opt, theme.SurfaceLight, nil, nil, function()
+                return self.Window.Theme.SurfaceLight
+            end)
             bind(optionConnections, opt.MouseButton1Click, function()
                 set(item)
                 setOpen(false)
             end)
         end
-        setOpen(open)
+        if open then
+            local optionsHeight = math.min(#filteredValues * rowHeight, maxOptionsHeight)
+            local h = 32 + optionsHeight
+            tween(card, { Size = UDim2.new(1, -16, 0, 48 + h) }, 0.08)
+            tween(list, { Size = UDim2.fromOffset(dropdownWidth, h) }, 0.08)
+            tween(optionsHolder, { Size = UDim2.new(1, 0, 0, optionsHeight) }, 0.08)
+            optionsHolder.CanvasPosition = Vector2.new(0, 0)
+        end
+    end
+    local function rebuild(newValues)
+        values = newValues or values
+        rebuildOptions(searchBox.Text)
     end
     rebuild(values)
-    bind(self.Window.Connections, btn.MouseButton1Click, function() setOpen(not open) end)
+    bind(self.Window.Connections, searchBox:GetPropertyChangedSignal("Text"), function()
+        if open then
+            rebuildOptions(searchBox.Text)
+        end
+    end)
+    bind(self.Window.Connections, list.MouseEnter, function()
+        pointerInsideDropdown = true
+        if open then
+            setPageScrolling(false)
+        end
+    end)
+    bind(self.Window.Connections, list.MouseLeave, function()
+        pointerInsideDropdown = false
+        setPageScrolling(true)
+    end)
+    bind(self.Window.Connections, searchBox.FocusLost, function()
+        task.defer(function()
+            if open and not pointerInsideDropdown then
+                suppressNextToggle = true
+                setOpen(false)
+                task.delay(0.12, function()
+                    suppressNextToggle = false
+                end)
+            end
+        end)
+    end)
+    bind(self.Window.Connections, Services.UserInputService.InputBegan, function(input)
+        if not open then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        if isInside(btn, input.Position) or isInside(list, input.Position) then return end
+        setOpen(false)
+    end)
+    bind(self.Window.Connections, btn.MouseButton1Click, function()
+        if suppressNextToggle then
+            suppressNextToggle = false
+            return
+        end
+        setOpen(not open)
+    end)
     self.Window:RegisterFlag(flag, value, set)
-    return { Instance = card, Set = function(_, v) set(v) end, Refresh = function(_, newValues) rebuild(newValues) end, Get = function() return value end }
+    return elementHandle(card, {
+        Set = function(_, v) set(v) end,
+        SetText = function(_, text) btn.Text = tostring(text or "Select...") end,
+        Refresh = function(_, newValues) rebuild(newValues) end,
+        Get = function() return value end
+    })
+end
+
+function Tab:CreateMultiDropdown(options)
+    options = options or {}
+    local selected = {}
+    for _, item in ipairs(options.Default or {}) do
+        selected[tostring(item)] = true
+    end
+    local list = options.Options or options.Values or {}
+    local display = {}
+    for _, item in ipairs(list) do table.insert(display, tostring(item)) end
+    local dropdown
+    local function selectedList()
+        local values = {}
+        for key, enabled in pairs(selected) do
+            if enabled then table.insert(values, key) end
+        end
+        table.sort(values)
+        return values
+    end
+    dropdown = self:CreateDropdown({
+        Name = options.Name or "Multi Dropdown",
+        Flag = options.Flag,
+        Options = display,
+        Default = "Select...",
+        Width = options.Width,
+        MaxVisibleOptions = options.MaxVisibleOptions,
+        Tooltip = options.Tooltip,
+        Callback = function(value)
+            selected[tostring(value)] = not selected[tostring(value)]
+            local values = selectedList()
+            dropdown:SetText(#values > 0 and table.concat(values, ", ") or "Select...")
+            if options.Flag then
+                self.Window.Flags[options.Flag] = values
+            end
+            if options.Callback then task.spawn(options.Callback, values) end
+        end
+    })
+    if options.Flag then
+        self.Window:RegisterFlag(options.Flag, selectedList(), function(values, silent)
+            selected = {}
+            for _, item in ipairs(values or {}) do selected[tostring(item)] = true end
+            local current = selectedList()
+            dropdown:SetText(#current > 0 and table.concat(current, ", ") or "Select...")
+            if not silent and options.Callback then task.spawn(options.Callback, current) end
+        end)
+    end
+    local initial = selectedList()
+    dropdown:SetText(#initial > 0 and table.concat(initial, ", ") or "Select...")
+    return dropdown
+end
+
+function Tab:CreateColorPicker(options)
+    options = options or {}
+    local default = options.Default or Color3.fromRGB(255, 255, 255)
+    local values = {
+        R = math.floor(default.R * 255 + 0.5),
+        G = math.floor(default.G * 255 + 0.5),
+        B = math.floor(default.B * 255 + 0.5)
+    }
+    self:CreateSection(options.Name or "Color Picker")
+    local preview = self:CreateLabel("Preview")
+    local function currentColor()
+        return Color3.fromRGB(values.R, values.G, values.B)
+    end
+    local function update(silent)
+        local color = currentColor()
+        if preview.Instance then
+            preview.Instance.BackgroundTransparency = 0
+            preview.Instance.BackgroundColor3 = color
+        end
+        if options.Flag then
+            self.Window.Flags[options.Flag] = { values.R, values.G, values.B }
+        end
+        if not silent and options.Callback then task.spawn(options.Callback, color) end
+    end
+    local r = self:CreateSlider({ Name = "Red", Min = 0, Max = 255, Increment = 1, Default = values.R, Callback = function(v) values.R = v update() end })
+    local g = self:CreateSlider({ Name = "Green", Min = 0, Max = 255, Increment = 1, Default = values.G, Callback = function(v) values.G = v update() end })
+    local b = self:CreateSlider({ Name = "Blue", Min = 0, Max = 255, Increment = 1, Default = values.B, Callback = function(v) values.B = v update() end })
+    if options.Flag then
+        self.Window:RegisterFlag(options.Flag, { values.R, values.G, values.B }, function(saved, silent)
+            values.R = saved and saved[1] or values.R
+            values.G = saved and saved[2] or values.G
+            values.B = saved and saved[3] or values.B
+            r:Set(values.R); g:Set(values.G); b:Set(values.B)
+            update(silent)
+        end)
+    end
+    update(true)
+    return elementHandle(preview.Instance, { Get = currentColor, Set = function(_, color) values.R = math.floor(color.R * 255 + 0.5); values.G = math.floor(color.G * 255 + 0.5); values.B = math.floor(color.B * 255 + 0.5); update() end })
+end
+
+function Tab:CreateCollapsibleSection(title)
+    local section = self:CreateSection(title)
+    local children = {}
+    local collapsed = false
+    local api = elementHandle(section.Instance, {
+        Add = function(_, element)
+            table.insert(children, element)
+            return element
+        end,
+        SetCollapsed = function(_, value)
+            collapsed = value ~= false
+            for _, element in ipairs(children) do
+                if element and element.Instance then element.Instance.Visible = not collapsed end
+            end
+        end,
+        Toggle = function(selfHandle)
+            selfHandle:SetCollapsed(not collapsed)
+        end,
+        Get = function() return collapsed end
+    })
+    return api
 end
 
 function Tab:CreateTextbox(options)
@@ -947,7 +1498,8 @@ function Tab:CreateTextbox(options)
     local name = options.Name or "Textbox"
     local flag = options.Flag or name
     local card, label = makeCard(self, self.Page, name, name, 46)
-    local box = create("TextBox", {
+    attachTooltip(self.Window, card, options.Tooltip)
+    local box = create("TextBox", rightControl({
         Text = tostring(options.Default or ""),
         PlaceholderText = options.Placeholder or "Enter text...",
         ClearTextOnFocus = false,
@@ -956,12 +1508,25 @@ function Tab:CreateTextbox(options)
         Font = Enum.Font.Gotham,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        TextTruncate = Enum.TextTruncate.AtEnd,
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.fromOffset(150, 28),
-        Position = UDim2.new(1, -160, 0, 9),
         BorderSizePixel = 0,
         Parent = card
-    })
+    }, 150, 28, 10))
+    trackTheme(self.Window, box, { TextColor3 = "Text", PlaceholderColor3 = "Muted", BackgroundColor3 = "SurfaceLight" })
+    fitText(box, 9, 12)
+    bind(self.Window.Connections, box.MouseEnter, function()
+        tween(box, { BackgroundColor3 = shade(self.Window.Theme.SurfaceLight, 0.05) }, 0.08)
+    end)
+    bind(self.Window.Connections, box.MouseLeave, function()
+        if not box:IsFocused() then
+            tween(box, { BackgroundColor3 = self.Window.Theme.SurfaceLight }, 0.08)
+        end
+    end)
+    bind(self.Window.Connections, box.Focused, function()
+        tween(box, { BackgroundColor3 = shade(self.Window.Theme.SurfaceLight, 0.07) }, 0.08)
+    end)
     addCorner(box, 8)
     create("UIPadding", { PaddingLeft = UDim.new(0, 9), PaddingRight = UDim.new(0, 9), Parent = box })
     local function set(text, silent)
@@ -971,10 +1536,11 @@ function Tab:CreateTextbox(options)
     end
     bind(self.Window.Connections, box.FocusLost, function(enter)
         if options.SubmitOnEnter and not enter then return end
+        tween(box, { BackgroundColor3 = self.Window.Theme.SurfaceLight }, 0.08)
         set(box.Text)
     end)
     self.Window:RegisterFlag(flag, box.Text, set)
-    return { Instance = card, Set = function(_, text) set(text) end, Get = function() return box.Text end }
+    return elementHandle(card, { Set = function(_, text) set(text) end, Get = function() return box.Text end })
 end
 
 function Tab:CreateKeybind(options)
@@ -985,15 +1551,19 @@ function Tab:CreateKeybind(options)
     local key = coerceKeyCode(options.Default, Enum.KeyCode.RightShift)
     local listening = false
     local card, label = makeCard(self, self.Page, name, name, 44)
-    local btn = makeTextButton({
+    attachTooltip(self.Window, card, options.Tooltip)
+    local btn = makeTextButton(rightControl({
         Text = key.Name,
         TextColor3 = theme.Text,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.fromOffset(104, 26),
-        Position = UDim2.new(1, -114, 0, 9),
         Parent = card
-    })
+    }, 104, 26, 10))
+    trackTheme(self.Window, btn, { TextColor3 = "Text", BackgroundColor3 = "SurfaceLight" })
+    fitText(btn, 9, 12)
+    addButtonFeedback(self.Window.Connections, btn, theme.SurfaceLight, nil, nil, function()
+        return self.Window.Theme.SurfaceLight
+    end)
     addCorner(btn, 8)
     local function set(newKey, silent)
         newKey = coerceKeyCode(newKey, key)
@@ -1020,7 +1590,7 @@ function Tab:CreateKeybind(options)
         end
     end)
     self.Window:RegisterFlag(flag, key.Name, set)
-    return { Instance = card, Set = function(_, newKey) set(newKey) end, Get = function() return key end }
+    return elementHandle(card, { Set = function(_, newKey) set(newKey) end, Get = function() return key end })
 end
 
 return VRBX
