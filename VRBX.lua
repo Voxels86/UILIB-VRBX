@@ -341,7 +341,7 @@ local function makeCard(self, parent, title, searchText, height)
     return card, label
 end
 
-function VRBX:CreateWindow(options)
+local function createWindowInternal(options)
     options = options or {}
     local theme = normalizeTheme(options.Theme)
     local gui = create("ScreenGui", {
@@ -636,6 +636,18 @@ function VRBX:CreateWindow(options)
     end)
 
     return self
+end
+
+function VRBX:CreateWindow(options)
+    options = options or {}
+    if options.SecureBoot == true then
+        local ok, result = pcall(createWindowInternal, options)
+        if ok then
+            return result
+        end
+        return nil
+    end
+    return createWindowInternal(options)
 end
 
 function Window:CreateTab(options)
