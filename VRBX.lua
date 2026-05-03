@@ -840,6 +840,22 @@ function Window:ListConfigs()
     return configs
 end
 
+function Window:DeleteConfig(name)
+    if not delfile or not isfile then
+        return false, "File delete APIs are unavailable in this executor."
+    end
+    name = name or self.AutoSaveConfig or self.Name
+    local file = configFileName(name)
+    if not isfile(file) then
+        return false, "Config not found: " .. file
+    end
+    local ok, err = pcall(delfile, file)
+    if ok and self.AutoSaveConfig == name then
+        self.AutoSaveConfig = nil
+    end
+    return ok, err
+end
+
 function Window:AutoLoadConfig(name)
     local ok = self:LoadConfig(name or self.Name)
     return ok
