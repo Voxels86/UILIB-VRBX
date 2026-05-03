@@ -365,6 +365,8 @@ function VRBX:CreateWindow(options)
         Connections = {},
         CurrentTab = nil,
         Minimized = false,
+        AutoSaveConfig = nil,
+        AutoSaveQueued = false,
         Name = options.Name or options.Title or "VRBX"
     }, Window)
 
@@ -777,9 +779,36 @@ function Window:RegisterFlag(flag, default, setter)
 end
 
 function Window:SetFlag(flag, value)
-    self.Flags[flag] = value
+    self:UpdateFlag(flag, value)
     if self.FlagSetters[flag] then
         self.FlagSetters[flag](value, true)
+    end
+end
+
+function Window:ApplyFlag(flag, value, noAutoSave)
+    self:UpdateFlag(flag, value, noAutoSave)
+    if self.FlagSetters[flag] then
+        self.FlagSetters[flag](value, true)
+    end
+end
+
+function Window:QueueAutoSave()
+    if not self.AutoSaveConfig or self.AutoSaveQueued then return end
+    self.AutoSaveQueued = true
+    task.delay(0.35, function()
+        self.AutoSaveQueued = false
+        if self.Gui and self.Gui.Parent and self.AutoSaveConfig then
+            self:SaveConfig(self.AutoSaveConfig, true)
+        end
+    end)
+end
+
+function Window:UpdateFlag(flag, value, noAutoSave)
+    if flag then
+        self.Flags[flag] = value
+        if not noAutoSave then
+            self:QueueAutoSave()
+        end
     end
 end
 
@@ -816,19 +845,23 @@ function Window:AutoLoadConfig(name)
     return ok
 end
 
-function Window:SaveConfig(name)
+function Window:SaveConfig(name, internal)
     if not writefile or not makefolder then
         return false, "File APIs are unavailable in this executor."
     end
     if not isfolder or not isfolder("VRBX") then
         pcall(makefolder, "VRBX")
     end
-    local file = configFileName(name or self.Name)
+    name = name or self.Name
+    local file = configFileName(name)
     local ok, data = pcall(Services.HttpService.JSONEncode, Services.HttpService, self.Flags)
     if not ok then
         return false, data
     end
     local wrote, err = pcall(writefile, file, data)
+    if wrote and not internal then
+        self.AutoSaveConfig = name
+    end
     return wrote, err
 end
 
@@ -848,9 +881,10 @@ function Window:LoadConfig(name)
     end
     for flag, value in pairs(decoded) do
         if self.FlagSetters[flag] then
-            self:SetFlag(flag, value)
+            self:ApplyFlag(flag, value, true)
         end
     end
+    self.AutoSaveConfig = name or self.Name
     return true
 end
 
@@ -995,7 +1029,7 @@ function Tab:CreateButton(options)
     addCorner(btn, 8)
     local function set(value, silent)
         state = not not value
-        self.Window.Flags[flag] = state
+        self.Window:UpdateFlag(flag, state)
         tween(btn, {
             BackgroundColor3 = buttonColor(),
             TextColor3 = self.Window.Theme.AccentText
@@ -1052,7 +1086,7 @@ function Tab:CreateToggle(options)
     addCorner(knob, 9)
     local function set(value, silent)
         state = not not value
-        self.Window.Flags[flag] = state
+        self.Window:UpdateFlag(flag, state)
         local currentTheme = self.Window.Theme
         for _, item in ipairs(self.Window.ThemeObjects) do
             if item.Object == track then
@@ -1133,7 +1167,7 @@ function Tab:CreateSlider(options)
         local alpha = max == min and 1 or (value - min) / (max - min)
         valueLabel.Text = formatValue(value)
         fill.Size = UDim2.fromScale(alpha, 1)
-        self.Window.Flags[flag] = value
+        self.Window:UpdateFlag(flag, value)
         if not silent and options.Callback then task.spawn(options.Callback, value) end
     end
     local function fromInput(input)
@@ -1263,7 +1297,7 @@ function Tab:CreateDropdown(options)
     local function set(newValue, silent)
         value = newValue
         btn.Text = tostring(newValue or "Select")
-        self.Window.Flags[flag] = value
+        self.Window:UpdateFlag(flag, value)
         if not silent and options.Callback then task.spawn(options.Callback, value) end
     end
     local function setOpen(state)
@@ -1410,7 +1444,7 @@ function Tab:CreateMultiDropdown(options)
             local values = selectedList()
             dropdown:SetText(#values > 0 and table.concat(values, ", ") or "Select...")
             if options.Flag then
-                self.Window.Flags[options.Flag] = values
+                self.Window:UpdateFlag(options.Flag, values)
             end
             if options.Callback then task.spawn(options.Callback, values) end
         end
@@ -1449,7 +1483,7 @@ function Tab:CreateColorPicker(options)
             preview.Instance.BackgroundColor3 = color
         end
         if options.Flag then
-            self.Window.Flags[options.Flag] = { values.R, values.G, values.B }
+            self.Window:UpdateFlag(options.Flag, { values.R, values.G, values.B })
         end
         if not silent and options.Callback then task.spawn(options.Callback, color) end
     end
@@ -1531,7 +1565,7 @@ function Tab:CreateTextbox(options)
     create("UIPadding", { PaddingLeft = UDim.new(0, 9), PaddingRight = UDim.new(0, 9), Parent = box })
     local function set(text, silent)
         box.Text = tostring(text or "")
-        self.Window.Flags[flag] = box.Text
+        self.Window:UpdateFlag(flag, box.Text)
         if not silent and options.Callback then task.spawn(options.Callback, box.Text) end
     end
     bind(self.Window.Connections, box.FocusLost, function(enter)
@@ -1570,7 +1604,7 @@ function Tab:CreateKeybind(options)
         if newKey then
             key = newKey
             btn.Text = key.Name
-            self.Window.Flags[flag] = key.Name
+            self.Window:UpdateFlag(flag, key.Name)
             if not silent and options.ChangedCallback then task.spawn(options.ChangedCallback, key) end
         end
     end
