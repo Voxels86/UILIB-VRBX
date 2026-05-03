@@ -251,6 +251,21 @@ local function addButtonFeedback(connections, button, normalColor, hoverColor, p
     end)
 end
 
+local function runCallback(options, callback, ...)
+    if not callback then return end
+    local args = { ... }
+    task.spawn(function()
+        if options and options.SecureCallback == true then
+            local ok, err = pcall(callback, table.unpack(args))
+            if not ok then
+                print("[VRBX Callback Error] " .. tostring(err))
+            end
+        else
+            callback(table.unpack(args))
+        end
+    end)
+end
+
 local function attachTooltip(window, target, text)
     if not text or text == "" then return end
     local tip
@@ -1062,15 +1077,13 @@ function Tab:CreateButton(options)
             BackgroundColor3 = buttonColor(),
             TextColor3 = self.Window.Theme.AccentText
         }, 0.08)
-        if not silent and options.Callback then
-            task.spawn(options.Callback, state)
-        end
+        if not silent then runCallback(options, options.Callback, state) end
     end
     bind(self.Window.Connections, btn.MouseButton1Click, function()
         if toggleMode then
             set(not state)
         elseif options.Callback then
-            task.spawn(options.Callback)
+            runCallback(options, options.Callback)
         end
     end)
     if toggleMode then
@@ -1124,7 +1137,7 @@ function Tab:CreateToggle(options)
         end
         tween(track, { BackgroundColor3 = state and currentTheme.Accent or currentTheme.SurfaceLight }, 0.12)
         tween(knob, { Position = state and UDim2.fromOffset(23, 3) or UDim2.fromOffset(3, 3) }, 0.12)
-        if not silent and options.Callback then task.spawn(options.Callback, state) end
+        if not silent then runCallback(options, options.Callback, state) end
     end
     bind(self.Window.Connections, track.MouseButton1Click, function() set(not state) end)
     self.Window:RegisterFlag(flag, state, set)
@@ -1196,7 +1209,7 @@ function Tab:CreateSlider(options)
         valueLabel.Text = formatValue(value)
         fill.Size = UDim2.fromScale(alpha, 1)
         self.Window:UpdateFlag(flag, value)
-        if not silent and options.Callback then task.spawn(options.Callback, value) end
+        if not silent then runCallback(options, options.Callback, value) end
     end
     local function fromInput(input)
         if bar.AbsoluteSize.X <= 0 then return end
@@ -1326,7 +1339,7 @@ function Tab:CreateDropdown(options)
         value = newValue
         btn.Text = tostring(newValue or "Select")
         self.Window:UpdateFlag(flag, value)
-        if not silent and options.Callback then task.spawn(options.Callback, value) end
+        if not silent then runCallback(options, options.Callback, value) end
     end
     local function setOpen(state)
         open = state
@@ -1474,7 +1487,7 @@ function Tab:CreateMultiDropdown(options)
             if options.Flag then
                 self.Window:UpdateFlag(options.Flag, values)
             end
-            if options.Callback then task.spawn(options.Callback, values) end
+            runCallback(options, options.Callback, values)
         end
     })
     if options.Flag then
@@ -1483,7 +1496,7 @@ function Tab:CreateMultiDropdown(options)
             for _, item in ipairs(values or {}) do selected[tostring(item)] = true end
             local current = selectedList()
             dropdown:SetText(#current > 0 and table.concat(current, ", ") or "Select...")
-            if not silent and options.Callback then task.spawn(options.Callback, current) end
+            if not silent then runCallback(options, options.Callback, current) end
         end)
     end
     local initial = selectedList()
@@ -1513,7 +1526,7 @@ function Tab:CreateColorPicker(options)
         if options.Flag then
             self.Window:UpdateFlag(options.Flag, { values.R, values.G, values.B })
         end
-        if not silent and options.Callback then task.spawn(options.Callback, color) end
+        if not silent then runCallback(options, options.Callback, color) end
     end
     local r = self:CreateSlider({ Name = "Red", Min = 0, Max = 255, Increment = 1, Default = values.R, Callback = function(v) values.R = v update() end })
     local g = self:CreateSlider({ Name = "Green", Min = 0, Max = 255, Increment = 1, Default = values.G, Callback = function(v) values.G = v update() end })
@@ -1594,7 +1607,7 @@ function Tab:CreateTextbox(options)
     local function set(text, silent)
         box.Text = tostring(text or "")
         self.Window:UpdateFlag(flag, box.Text)
-        if not silent and options.Callback then task.spawn(options.Callback, box.Text) end
+        if not silent then runCallback(options, options.Callback, box.Text) end
     end
     bind(self.Window.Connections, box.FocusLost, function(enter)
         if options.SubmitOnEnter and not enter then return end
@@ -1633,7 +1646,7 @@ function Tab:CreateKeybind(options)
             key = newKey
             btn.Text = key.Name
             self.Window:UpdateFlag(flag, key.Name)
-            if not silent and options.ChangedCallback then task.spawn(options.ChangedCallback, key) end
+            if not silent then runCallback(options, options.ChangedCallback, key) end
         end
     end
     bind(self.Window.Connections, btn.MouseButton1Click, function()
@@ -1648,7 +1661,7 @@ function Tab:CreateKeybind(options)
             return
         end
         if input.KeyCode == key and options.Callback then
-            task.spawn(options.Callback)
+            runCallback(options, options.Callback)
         end
     end)
     self.Window:RegisterFlag(flag, key.Name, set)
