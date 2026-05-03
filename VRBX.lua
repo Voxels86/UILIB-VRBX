@@ -193,12 +193,13 @@ local function makeCard(self, parent, title, searchText, height)
     local card = create("Frame", {
         Name = "ElementCard",
         BackgroundColor3 = theme.Surface,
-        Size = UDim2.new(1, 0, 0, height or 48),
+        BackgroundTransparency = 0.18,
+        Size = UDim2.new(1, 0, 0, height or 44),
         BorderSizePixel = 0,
         Parent = parent
     })
-    addCorner(card, 10)
-    addStroke(card, theme.Stroke, 0.22)
+    addCorner(card, 9)
+    addStroke(card, theme.Stroke, 0.35)
 
     local label = makeTextLabel({
         Name = "Title",
@@ -207,7 +208,7 @@ local function makeCard(self, parent, title, searchText, height)
         TextSize = 13,
         Font = Enum.Font.GothamMedium,
         Size = UDim2.new(1, -22, 0, 20),
-        Position = UDim2.fromOffset(12, 8),
+        Position = UDim2.fromOffset(10, 7),
         Parent = card
     })
 
@@ -271,20 +272,20 @@ function VRBX:CreateWindow(options)
         Name = "Topbar",
         Active = true,
         BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 0.06,
-        Size = UDim2.new(1, 0, 0, 48),
+        BackgroundTransparency = 0.14,
+        Size = UDim2.new(1, 0, 0, 44),
         BorderSizePixel = 0,
         Parent = main
     })
 
     local title = makeTextLabel({
         Name = "WindowTitle",
-        Text = (options.Icon and (tostring(options.Icon) .. "  ") or "") .. (options.Title or "VRBX"),
+        Text = options.Title or "VRBX",
         TextColor3 = theme.Text,
-        TextSize = 16,
+        TextSize = 15,
         Font = Enum.Font.GothamBold,
-        Size = UDim2.new(0, 190, 1, 0),
-        Position = UDim2.fromOffset(16, 0),
+        Size = UDim2.new(0, 210, 1, 0),
+        Position = UDim2.fromOffset(12, 0),
         Parent = topbar
     })
 
@@ -299,9 +300,10 @@ function VRBX:CreateWindow(options)
         TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
         BackgroundColor3 = theme.SurfaceLight,
+        BackgroundTransparency = 0.18,
         BorderSizePixel = 0,
-        Size = UDim2.new(0, 170, 0, 30),
-        Position = UDim2.new(1, -282, 0, 9),
+        Size = UDim2.new(0, 170, 0, 28),
+        Position = UDim2.new(1, -276, 0, 8),
         Parent = topbar
     })
     addCorner(search, 8)
@@ -316,8 +318,9 @@ function VRBX:CreateWindow(options)
         Font = Enum.Font.GothamBold,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.fromOffset(34, 30),
-        Position = UDim2.new(1, -104, 0, 9),
+        BackgroundTransparency = 0.18,
+        Size = UDim2.fromOffset(34, 28),
+        Position = UDim2.new(1, -100, 0, 8),
         Parent = topbar
     })
     addCorner(configBtn, 8)
@@ -330,8 +333,9 @@ function VRBX:CreateWindow(options)
         TextSize = 18,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.fromOffset(30, 30),
-        Position = UDim2.new(1, -66, 0, 9),
+        BackgroundTransparency = 0.18,
+        Size = UDim2.fromOffset(28, 28),
+        Position = UDim2.new(1, -62, 0, 8),
         Parent = topbar
     })
     addCorner(minBtn, 8)
@@ -344,8 +348,8 @@ function VRBX:CreateWindow(options)
         TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.Danger,
-        Size = UDim2.fromOffset(30, 30),
-        Position = UDim2.new(1, -32, 0, 9),
+        Size = UDim2.fromOffset(28, 28),
+        Position = UDim2.new(1, -30, 0, 8),
         Parent = topbar
     })
     addCorner(closeBtn, 8)
@@ -353,32 +357,32 @@ function VRBX:CreateWindow(options)
     local sidebar = create("Frame", {
         Name = "Sidebar",
         BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 0.25,
-        Position = UDim2.fromOffset(10, 58),
-        Size = UDim2.new(0, 150, 1, -68),
+        BackgroundTransparency = 0.55,
+        Position = UDim2.fromOffset(8, 54),
+        Size = UDim2.new(0, 146, 1, -62),
         BorderSizePixel = 0,
         Parent = main
     })
-    addCorner(sidebar, 12)
-    addStroke(sidebar, theme.Stroke, 0.35)
+    addCorner(sidebar, 10)
+    addStroke(sidebar, theme.Stroke, 0.55)
 
     local tabList = create("UIListLayout", {
-        Padding = UDim.new(0, 6),
+        Padding = UDim.new(0, 4),
         SortOrder = Enum.SortOrder.LayoutOrder,
         Parent = sidebar
     })
     create("UIPadding", {
-        PaddingTop = UDim.new(0, 8),
-        PaddingLeft = UDim.new(0, 8),
-        PaddingRight = UDim.new(0, 8),
+        PaddingTop = UDim.new(0, 6),
+        PaddingLeft = UDim.new(0, 6),
+        PaddingRight = UDim.new(0, 6),
         Parent = sidebar
     })
 
     local pages = create("Frame", {
         Name = "Pages",
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(170, 58),
-        Size = UDim2.new(1, -180, 1, -68),
+        Position = UDim2.fromOffset(164, 54),
+        Size = UDim2.new(1, -172, 1, -62),
         BorderSizePixel = 0,
         Parent = main
     })
@@ -402,10 +406,10 @@ function VRBX:CreateWindow(options)
         Name = "ResizeHandle",
         Active = true,
         AnchorPoint = Vector2.new(1, 1),
-        BackgroundColor3 = theme.Accent,
-        BackgroundTransparency = 0.25,
-        Position = UDim2.new(1, -6, 1, -6),
-        Size = UDim2.fromOffset(14, 14),
+        BackgroundColor3 = theme.Muted,
+        BackgroundTransparency = 0.35,
+        Position = UDim2.new(1, -5, 1, -5),
+        Size = UDim2.fromOffset(12, 12),
         BorderSizePixel = 0,
         Parent = main
     })
@@ -484,8 +488,8 @@ function VRBX:CreateWindow(options)
     bind(self.Connections, minBtn.MouseButton1Click, function()
         self.Minimized = not self.Minimized
         if self.Minimized then
-            tween(main, { Size = UDim2.fromOffset(main.AbsoluteSize.X, 48) }, 0.16)
-            tween(shadow, { Size = UDim2.fromOffset(main.AbsoluteSize.X, 48) }, 0.16)
+            tween(main, { Size = UDim2.fromOffset(main.AbsoluteSize.X, 44) }, 0.16)
+            tween(shadow, { Size = UDim2.fromOffset(main.AbsoluteSize.X, 44) }, 0.16)
         else
             tween(main, { Size = normalSize }, 0.16)
             tween(shadow, { Size = normalSize }, 0.16)
@@ -520,27 +524,27 @@ function Window:CreateTab(options)
         Parent = self.Pages
     })
     local layout = create("UIListLayout", {
-        Padding = UDim.new(0, 10),
+        Padding = UDim.new(0, 8),
         SortOrder = Enum.SortOrder.LayoutOrder,
         Parent = page
     })
-    create("UIPadding", { PaddingRight = UDim.new(0, 6), PaddingBottom = UDim.new(0, 8), Parent = page })
+    create("UIPadding", { PaddingRight = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6), Parent = page })
     bind(self.Connections, layout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
         page.CanvasSize = UDim2.fromOffset(0, layout.AbsoluteContentSize.Y + 10)
     end)
 
     local button = makeTextButton({
         Name = tab.Name .. "Button",
-        Text = (options.Icon and (tostring(options.Icon) .. "  ") or "") .. tab.Name,
+        Text = tab.Name,
         TextColor3 = theme.Muted,
         Font = Enum.Font.GothamMedium,
         TextSize = 13,
         BackgroundColor3 = theme.SurfaceLight,
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 34),
+        Size = UDim2.new(1, 0, 0, 32),
         Parent = self.Sidebar
     })
-    addCorner(button, 9)
+    addCorner(button, 8)
     create("UIPadding", { PaddingLeft = UDim.new(0, 10), Parent = button })
 
     tab.Page = page
@@ -677,15 +681,15 @@ function Tab:CreateSection(title)
     local holder = create("Frame", {
         Name = "Section",
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 26),
+        Size = UDim2.new(1, 0, 0, 22),
         Parent = self.Page
     })
     makeTextLabel({
         Text = tostring(title or "Section"),
         TextColor3 = theme.Accent,
         Font = Enum.Font.GothamBold,
-        TextSize = 13,
-        Position = UDim2.fromOffset(2, 3),
+        TextSize = 12,
+        Position = UDim2.fromOffset(2, 1),
         Size = UDim2.new(1, -4, 0, 20),
         Parent = holder
     })
@@ -695,8 +699,8 @@ end
 
 function Tab:CreateLabel(options)
     options = type(options) == "table" and options or { Text = tostring(options or "Label") }
-    local card, label = makeCard(self, self.Page, options.Text or "Label", options.Text or "Label", 38)
-    label.Position = UDim2.fromOffset(12, 9)
+    local card, label = makeCard(self, self.Page, options.Text or "Label", options.Text or "Label", 36)
+    label.Position = UDim2.fromOffset(10, 8)
     return {
         Instance = card,
         Set = function(_, text)
@@ -708,14 +712,14 @@ end
 function Tab:CreateParagraph(options)
     options = options or {}
     local theme = self.Window.Theme
-    local card, label = makeCard(self, self.Page, options.Title or "Paragraph", (options.Title or "") .. " " .. (options.Content or ""), 82)
+    local card, label = makeCard(self, self.Page, options.Title or "Paragraph", (options.Title or "") .. " " .. (options.Content or ""), 74)
     local body = makeTextLabel({
         Text = tostring(options.Content or options.Text or ""),
         TextColor3 = theme.Muted,
         TextWrapped = true,
         TextYAlignment = Enum.TextYAlignment.Top,
-        Position = UDim2.fromOffset(12, 32),
-        Size = UDim2.new(1, -24, 1, -40),
+        Position = UDim2.fromOffset(10, 29),
+        Size = UDim2.new(1, -20, 1, -34),
         Parent = card
     })
     return {
@@ -730,7 +734,7 @@ end
 function Tab:CreateButton(options)
     options = options or {}
     local theme = self.Window.Theme
-    local card, label = makeCard(self, self.Page, options.Name or options.Title or "Button", options.Name or options.Title or "Button", 48)
+    local card, label = makeCard(self, self.Page, options.Name or options.Title or "Button", options.Name or options.Title or "Button", 44)
     local btn = makeTextButton({
         Text = options.ButtonText or "Run",
         TextColor3 = theme.AccentText,
@@ -738,8 +742,8 @@ function Tab:CreateButton(options)
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.Accent,
-        Size = UDim2.fromOffset(82, 28),
-        Position = UDim2.new(1, -94, 0, 10),
+        Size = UDim2.fromOffset(82, 26),
+        Position = UDim2.new(1, -92, 0, 9),
         Parent = card
     })
     addCorner(btn, 8)
@@ -757,18 +761,18 @@ function Tab:CreateToggle(options)
     local name = options.Name or "Toggle"
     local flag = options.Flag or name
     local state = not not options.Default
-    local card, label = makeCard(self, self.Page, name, name, 48)
+    local card, label = makeCard(self, self.Page, name, name, 44)
     local track = makeTextButton({
         Text = "",
         BackgroundColor3 = state and theme.Accent or theme.SurfaceLight,
-        Size = UDim2.fromOffset(44, 24),
-        Position = UDim2.new(1, -56, 0, 12),
+        Size = UDim2.fromOffset(42, 22),
+        Position = UDim2.new(1, -52, 0, 11),
         Parent = card
     })
     addCorner(track, 12)
     local knob = create("Frame", {
         BackgroundColor3 = theme.Text,
-        Size = UDim2.fromOffset(18, 18),
+        Size = UDim2.fromOffset(16, 16),
         Position = state and UDim2.fromOffset(23, 3) or UDim2.fromOffset(3, 3),
         BorderSizePixel = 0,
         Parent = track
@@ -801,20 +805,20 @@ function Tab:CreateSlider(options)
         increment = 1
     end
     local value = math.clamp(options.Default or min, min, max)
-    local card, label = makeCard(self, self.Page, name, name, 62)
+    local card, label = makeCard(self, self.Page, name, name, 56)
     local valueLabel = makeTextLabel({
         Text = tostring(value),
         TextColor3 = theme.Muted,
         TextXAlignment = Enum.TextXAlignment.Right,
-        Position = UDim2.new(1, -82, 0, 8),
+        Position = UDim2.new(1, -80, 0, 7),
         Size = UDim2.fromOffset(70, 20),
         Parent = card
     })
     local bar = makeTextButton({
         Text = "",
         BackgroundColor3 = theme.SurfaceLight,
-        Position = UDim2.fromOffset(12, 39),
-        Size = UDim2.new(1, -24, 0, 8),
+        Position = UDim2.fromOffset(10, 35),
+        Size = UDim2.new(1, -20, 0, 7),
         Parent = card
     })
     addCorner(bar, 4)
@@ -865,22 +869,22 @@ function Tab:CreateDropdown(options)
     local flag = options.Flag or name
     local values = options.Options or options.Values or {}
     local value = options.Default or values[1]
-    local card, label = makeCard(self, self.Page, name, name, 48)
+    local card, label = makeCard(self, self.Page, name, name, 44)
     local btn = makeTextButton({
         Text = tostring(value or "Select"),
         TextColor3 = theme.Text,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.fromOffset(130, 28),
-        Position = UDim2.new(1, -142, 0, 10),
+        Size = UDim2.fromOffset(130, 26),
+        Position = UDim2.new(1, -140, 0, 9),
         Parent = card
     })
     addCorner(btn, 8)
     local list = create("Frame", {
         BackgroundColor3 = theme.SurfaceLight,
         Size = UDim2.new(1, 0, 0, 0),
-        Position = UDim2.fromOffset(0, 48),
+        Position = UDim2.fromOffset(0, 44),
         BorderSizePixel = 0,
         ClipsDescendants = true,
         Parent = card
@@ -897,8 +901,8 @@ function Tab:CreateDropdown(options)
     end
     local function setOpen(state)
         open = state
-        local h = open and math.min(#values * 28, 140) or 0
-        tween(card, { Size = UDim2.new(1, 0, 0, 48 + h) }, 0.12)
+        local h = open and math.min(#values * 26, 130) or 0
+        tween(card, { Size = UDim2.new(1, 0, 0, 44 + h) }, 0.12)
         tween(list, { Size = UDim2.new(1, 0, 0, h) }, 0.12)
     end
     local function rebuild(newValues)
@@ -915,7 +919,7 @@ function Tab:CreateDropdown(options)
                 TextColor3 = theme.Muted,
                 TextXAlignment = Enum.TextXAlignment.Center,
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 28),
+                Size = UDim2.new(1, 0, 0, 26),
                 Parent = list
             })
             bind(optionConnections, opt.MouseButton1Click, function()
@@ -936,7 +940,7 @@ function Tab:CreateTextbox(options)
     local theme = self.Window.Theme
     local name = options.Name or "Textbox"
     local flag = options.Flag or name
-    local card, label = makeCard(self, self.Page, name, name, 52)
+    local card, label = makeCard(self, self.Page, name, name, 46)
     local box = create("TextBox", {
         Text = tostring(options.Default or ""),
         PlaceholderText = options.Placeholder or "Enter text...",
@@ -947,8 +951,8 @@ function Tab:CreateTextbox(options)
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.fromOffset(160, 30),
-        Position = UDim2.new(1, -172, 0, 11),
+        Size = UDim2.fromOffset(160, 28),
+        Position = UDim2.new(1, -170, 0, 9),
         BorderSizePixel = 0,
         Parent = card
     })
@@ -974,14 +978,14 @@ function Tab:CreateKeybind(options)
     local flag = options.Flag or name
     local key = coerceKeyCode(options.Default, Enum.KeyCode.RightShift)
     local listening = false
-    local card, label = makeCard(self, self.Page, name, name, 48)
+    local card, label = makeCard(self, self.Page, name, name, 44)
     local btn = makeTextButton({
         Text = key.Name,
         TextColor3 = theme.Text,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.SurfaceLight,
-        Size = UDim2.fromOffset(110, 28),
-        Position = UDim2.new(1, -122, 0, 10),
+        Size = UDim2.fromOffset(110, 26),
+        Position = UDim2.new(1, -120, 0, 9),
         Parent = card
     })
     addCorner(btn, 8)
