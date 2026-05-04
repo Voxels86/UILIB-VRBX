@@ -5,7 +5,8 @@ VRBX.Version = "1.0.0"
 local Services = {
     TweenService = game:GetService("TweenService"),
     UserInputService = game:GetService("UserInputService"),
-    HttpService = game:GetService("HttpService")
+    HttpService = game:GetService("HttpService"),
+    TextService = game:GetService("TextService")
 }
 
 local Themes = {
@@ -380,13 +381,12 @@ end
 local function makeCard(self, parent, title, searchText, height)
     local theme = self.Window.Theme
     local text = tostring(title or "Element")
-    local extraLines = math.max(0, math.ceil(#text / 36) - 1)
-    local cardHeight = math.max(height or 44, (height or 44) + (extraLines * 16))
+    local baseHeight = height or 44
     local card = create("Frame", {
         Name = runtimeName(self.Window, "ElementCard"),
         BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 0.18,
-        Size = UDim2.new(1, -16, 0, cardHeight),
+        Size = UDim2.new(1, -16, 0, baseHeight),
         BorderSizePixel = 0,
         Parent = parent
     })
@@ -410,6 +410,19 @@ local function makeCard(self, parent, title, searchText, height)
     fitText(label, 10, 13)
     label.TextScaled = false
     label.TextWrapped = true
+
+    local function updateHeight()
+        if not card.Parent then return end
+        local width = math.max(label.AbsoluteSize.X, 40)
+        local bounds = Services.TextService:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(width, 1000))
+        local needed = math.max(baseHeight, math.ceil(bounds.Y) + 18)
+        if math.abs(card.Size.Y.Offset - needed) > 1 then
+            card.Size = UDim2.new(1, -16, 0, needed)
+        end
+    end
+    bind(self.Window.Connections, label:GetPropertyChangedSignal("AbsoluteSize"), updateHeight)
+    bind(self.Window.Connections, label:GetPropertyChangedSignal("Text"), updateHeight)
+    task.defer(updateHeight)
 
     table.insert(self.Window.Searchables, { Frame = card, Text = string.lower(searchText or title or "") })
     if title then
