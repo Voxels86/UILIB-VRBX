@@ -163,6 +163,16 @@ local function normalizeTheme(theme)
     return Themes.Midnight
 end
 
+local function firstNonNil(...)
+    for i = 1, select("#", ...) do
+        local value = select(i, ...)
+        if value ~= nil then
+            return value
+        end
+    end
+    return nil
+end
+
 local function configFileName(name)
     name = tostring(name or "Default"):gsub("[^%w_%-%s]", "")
     return "VRBX/" .. name .. ".json"
@@ -433,11 +443,15 @@ end
 
 local function createWindowInternal(options)
     options = options or {}
-    local theme = normalizeTheme(options.Theme)
-    local nameScrambling = options.RuntimeNameScrambling == true or options.RandomizeInstanceNames == true
-    local nameSalt = tostring(options.NameSalt or "vrbx")
+    local windowSettings = options.WindowSettings or {}
+    local securitySettings = options.SecuritySettings or {}
+    local closeSettings = options.CloseSettings or {}
+    local configSettings = options.ConfigSettings or {}
+    local theme = normalizeTheme(firstNonNil(options.Theme, windowSettings.Theme))
+    local nameScrambling = firstNonNil(options.RuntimeNameScrambling, options.RandomizeInstanceNames, securitySettings.RuntimeNameScrambling, securitySettings.RandomizeInstanceNames) == true
+    local nameSalt = tostring(firstNonNil(options.NameSalt, securitySettings.NameSalt, "vrbx"))
     local gui = create("ScreenGui", {
-        Name = nameScrambling and (nameSalt .. "_" .. randomToken(14)) or (options.Name or "VRBX"),
+        Name = nameScrambling and (nameSalt .. "_" .. randomToken(14)) or (firstNonNil(options.Name, windowSettings.Name) or "VRBX"),
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         IgnoreGuiInset = true,
@@ -447,7 +461,7 @@ local function createWindowInternal(options)
     local self = setmetatable({
         Gui = gui,
         Theme = theme,
-        ThemeName = type(options.Theme) == "string" and options.Theme or "Custom",
+        ThemeName = type(firstNonNil(options.Theme, windowSettings.Theme)) == "string" and firstNonNil(options.Theme, windowSettings.Theme) or "Custom",
         Tabs = {},
         TabMap = {},
         ThemeObjects = {},
@@ -459,22 +473,22 @@ local function createWindowInternal(options)
         Connections = {},
         CurrentTab = nil,
         Minimized = false,
-        SecureBoot = options.SecureBoot == true,
-        NoErrorCallbacks = options.NoErrorCallbacks == true,
-        AskBeforeClose = options.AskBeforeClose == true,
-        TurnOffAfterDelete = options.TurnOffAfterDelete == true,
+        SecureBoot = firstNonNil(options.SecureBoot, securitySettings.SecureBoot) == true,
+        NoErrorCallbacks = firstNonNil(options.NoErrorCallbacks, securitySettings.NoErrorCallbacks) == true,
+        AskBeforeClose = firstNonNil(options.AskBeforeClose, closeSettings.AskBeforeClose) == true,
+        TurnOffAfterDelete = firstNonNil(options.TurnOffAfterDelete, closeSettings.TurnOffAfterDelete) == true,
         NameScrambling = nameScrambling,
         NameSalt = nameSalt,
-        ConfigSuffix = options.ConfigSuffix,
-        RandomizeConfigNames = options.RandomizeConfigNames == true,
+        ConfigSuffix = firstNonNil(options.ConfigSuffix, configSettings.ConfigSuffix),
+        RandomizeConfigNames = firstNonNil(options.RandomizeConfigNames, configSettings.RandomizeConfigNames) == true,
         AutoSaveConfig = nil,
         AutoSaveQueued = false,
-        Name = options.Name or options.Title or "VRBX"
+        Name = firstNonNil(options.Name, windowSettings.Name, options.Title, windowSettings.Title) or "VRBX"
     }, Window)
 
-    local size = options.Size or UDim2.fromOffset(620, 430)
+    local size = firstNonNil(options.Size, windowSettings.Size) or UDim2.fromOffset(620, 430)
     local normalSize = size
-    local pos = options.Position or UDim2.new(0.5, -310, 0.5, -215)
+    local pos = firstNonNil(options.Position, windowSettings.Position) or UDim2.new(0.5, -310, 0.5, -215)
 
     local shadow = create("Frame", {
         Name = runtimeName(self, "Shadow"),
@@ -514,7 +528,7 @@ local function createWindowInternal(options)
 
     local title = makeTextLabel({
         Name = runtimeName(self, "WindowTitle"),
-        Text = options.Title or "VRBX",
+        Text = firstNonNil(options.Title, windowSettings.Title) or "VRBX",
         TextColor3 = theme.Text,
         TextSize = 15,
         Font = Enum.Font.GothamBold,
@@ -1240,9 +1254,22 @@ function Window:Confirm(options)
     if delayTime > 0 then
         canConfirm = false
         local originalText = yes.Text
-        yes.Text = tostring(math.ceil(delayTime)) .. "s"
+        local startTime = os.clock()
+        local function formatRemaining(seconds)
+            local rounded = math.ceil(math.max(0, seconds) * 10) / 10
+            return string.format("%.1fs", rounded)
+        end
+        yes.Text = formatRemaining(delayTime)
         local fill = create("Frame", { BackgroundColor3 = Color3.fromRGB(255, 255, 255), BackgroundTransparency = 0.82, BorderSizePixel = 0, Size = UDim2.fromScale(0, 1), ZIndex = 82, Parent = yes })
         tween(fill, { Size = UDim2.fromScale(1, 1) }, delayTime)
+        task.spawn(function()
+            while yes and yes.Parent and not canConfirm do
+                local remaining = delayTime - (os.clock() - startTime)
+                yes.Text = formatRemaining(remaining)
+                if remaining <= 0 then break end
+                task.wait(0.05)
+            end
+        end)
         task.delay(delayTime, function()
             if yes and yes.Parent then
                 canConfirm = true
