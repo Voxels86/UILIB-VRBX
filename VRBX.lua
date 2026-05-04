@@ -461,6 +461,8 @@ local function createWindowInternal(options)
         Minimized = false,
         SecureBoot = options.SecureBoot == true,
         NoErrorCallbacks = options.NoErrorCallbacks == true,
+        AskBeforeClose = options.AskBeforeClose == true,
+        TurnOffAfterDelete = options.TurnOffAfterDelete == true,
         NameScrambling = nameScrambling,
         NameSalt = nameSalt,
         ConfigSuffix = options.ConfigSuffix,
@@ -744,7 +746,7 @@ local function createWindowInternal(options)
     end)
 
     bind(self.Connections, closeBtn.MouseButton1Click, function()
-        self:Destroy()
+        self:RequestClose()
     end)
 
     return self
@@ -893,6 +895,40 @@ end
 
 function Window:Toggle()
     return self:SetVisible(not self.Main.Visible)
+end
+
+function Window:TurnOffBooleanFlags()
+    for flag, value in pairs(self.Flags) do
+        if value == true then
+            self:SetFlag(flag, false)
+        end
+    end
+end
+
+function Window:RequestClose()
+    local function closeNow()
+        if self.TurnOffAfterDelete then
+            self:TurnOffBooleanFlags()
+        end
+        self:Destroy()
+    end
+    if self.AskBeforeClose then
+        self:Confirm({
+            Title = "Close UI",
+            Content = "Are you sure you want to permanently close the UI?",
+            Type = "warning",
+            ConfirmText = "Close",
+            CancelText = "Cancel",
+            NoErrorCallbacks = true,
+            Callback = function(confirmed)
+                if confirmed then
+                    closeNow()
+                end
+            end
+        })
+    else
+        closeNow()
+    end
 end
 
 function Window:SetStatus(text)
@@ -1589,6 +1625,9 @@ function Tab:CreateDropdown(options)
             self.Page.ScrollingEnabled = enabled
         end
     end
+    local function hasDropdownOverflow()
+        return optionsHolder.CanvasSize.Y.Offset > optionsHolder.AbsoluteSize.Y + 1
+    end
     local function isInside(instance, point)
         local pos = instance.AbsolutePosition
         local size = instance.AbsoluteSize
@@ -1612,6 +1651,11 @@ function Tab:CreateDropdown(options)
         if open then
             searchBox.Text = ""
             optionsHolder.CanvasPosition = Vector2.new(0, 0)
+            task.defer(function()
+                if open and pointerInsideDropdown and hasDropdownOverflow() then
+                    setPageScrolling(false)
+                end
+            end)
         else
             searchBox:ReleaseFocus()
         end
@@ -1668,11 +1712,12 @@ function Tab:CreateDropdown(options)
     bind(self.Window.Connections, searchBox:GetPropertyChangedSignal("Text"), function()
         if open then
             rebuildOptions(searchBox.Text)
+            setPageScrolling(not (pointerInsideDropdown and hasDropdownOverflow()))
         end
     end)
     bind(self.Window.Connections, list.MouseEnter, function()
         pointerInsideDropdown = true
-        if open then
+        if open and hasDropdownOverflow() then
             setPageScrolling(false)
         end
     end)
