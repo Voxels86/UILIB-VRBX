@@ -86,6 +86,23 @@ local function create(className, props, children)
     return obj
 end
 
+local function randomName()
+    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    local out = table.create(18)
+    for i = 1, 18 do
+        local index = math.random(1, #chars)
+        out[i] = string.sub(chars, index, index)
+    end
+    return table.concat(out)
+end
+
+local function scrambleInstanceNames(root)
+    root.Name = randomName()
+    for _, child in ipairs(root:GetDescendants()) do
+        child.Name = randomName()
+    end
+end
+
 local function addCorner(parent, radius)
     return nil
 end
@@ -148,6 +165,23 @@ end
 local function configFileName(name)
     name = tostring(name or "Default"):gsub("[^%w_%-%s]", "")
     return "VRBX/" .. name .. ".json"
+end
+
+local function randomToken(length)
+    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    local result = {}
+    for i = 1, length or 10 do
+        local index = math.random(1, #chars)
+        result[i] = chars:sub(index, index)
+    end
+    return table.concat(result)
+end
+
+local function runtimeName(window, fallback)
+    if window and window.NameScrambling then
+        return (window.NameSalt or "vr") .. "_" .. randomToken(12)
+    end
+    return fallback
 end
 
 local function offsetUDim2(value, x, y)
@@ -311,8 +345,21 @@ end
 local function elementHandle(instance, extra)
     local handle = extra or {}
     handle.Instance = instance
+    handle.Disabled = false
+    handle.DefaultTransparency = instance.BackgroundTransparency
     function handle:Visible(value)
         instance.Visible = value ~= false
+        return self
+    end
+    function handle:SetDisabled(value)
+        self.Disabled = value ~= false
+        instance.Active = not self.Disabled
+        instance.BackgroundTransparency = self.Disabled and 0.45 or self.DefaultTransparency
+        for _, child in ipairs(instance:GetDescendants()) do
+            if child:IsA("GuiButton") then
+                child.Active = not self.Disabled
+            end
+        end
         return self
     end
     function handle:Destroy()
@@ -324,7 +371,7 @@ end
 local function makeCard(self, parent, title, searchText, height)
     local theme = self.Window.Theme
     local card = create("Frame", {
-        Name = "ElementCard",
+        Name = runtimeName(self.Window, "ElementCard"),
         BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 0.18,
         Size = UDim2.new(1, -16, 0, height or 44),
@@ -336,7 +383,7 @@ local function makeCard(self, parent, title, searchText, height)
     trackTheme(self.Window, addStroke(card, theme.Stroke, 0.35), { Color = "Stroke" })
 
     local label = makeTextLabel({
-        Name = "Title",
+        Name = runtimeName(self.Window, "Title"),
         Text = title or "Element",
         TextColor3 = theme.Text,
         TextSize = 13,
@@ -359,8 +406,10 @@ end
 local function createWindowInternal(options)
     options = options or {}
     local theme = normalizeTheme(options.Theme)
+    local nameScrambling = options.RuntimeNameScrambling == true or options.RandomizeInstanceNames == true
+    local nameSalt = tostring(options.NameSalt or "vrbx")
     local gui = create("ScreenGui", {
-        Name = options.Name or "VRBX",
+        Name = nameScrambling and (nameSalt .. "_" .. randomToken(14)) or (options.Name or "VRBX"),
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         IgnoreGuiInset = true,
@@ -376,10 +425,15 @@ local function createWindowInternal(options)
         Flags = {},
         Defaults = {},
         FlagSetters = {},
+        FlagWatchers = {},
         Searchables = {},
         Connections = {},
         CurrentTab = nil,
         Minimized = false,
+        NameScrambling = nameScrambling,
+        NameSalt = nameSalt,
+        ConfigSuffix = options.ConfigSuffix,
+        RandomizeConfigNames = options.RandomizeConfigNames == true,
         AutoSaveConfig = nil,
         AutoSaveQueued = false,
         Name = options.Name or options.Title or "VRBX"
@@ -390,7 +444,7 @@ local function createWindowInternal(options)
     local pos = options.Position or UDim2.new(0.5, -310, 0.5, -215)
 
     local shadow = create("Frame", {
-        Name = "Shadow",
+        Name = runtimeName(self, "Shadow"),
         BackgroundColor3 = Color3.new(0, 0, 0),
         BackgroundTransparency = 1,
         Position = pos,
@@ -401,7 +455,7 @@ local function createWindowInternal(options)
     addCorner(shadow, 16)
 
     local main = create("Frame", {
-        Name = "Main",
+        Name = runtimeName(self, "Main"),
         BackgroundColor3 = theme.Background,
         BackgroundTransparency = 0.02,
         Position = pos,
@@ -415,7 +469,7 @@ local function createWindowInternal(options)
     trackTheme(self, addStroke(main, theme.Stroke, 0.05), { Color = "Stroke" })
 
     local topbar = create("Frame", {
-        Name = "Topbar",
+        Name = runtimeName(self, "Topbar"),
         Active = true,
         BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 0.14,
@@ -426,7 +480,7 @@ local function createWindowInternal(options)
     trackTheme(self, topbar, { BackgroundColor3 = "Surface" })
 
     local title = makeTextLabel({
-        Name = "WindowTitle",
+        Name = runtimeName(self, "WindowTitle"),
         Text = options.Title or "VRBX",
         TextColor3 = theme.Text,
         TextSize = 15,
@@ -438,7 +492,7 @@ local function createWindowInternal(options)
     trackTheme(self, title, { TextColor3 = "Text" })
 
     local search = create("TextBox", {
-        Name = "Search",
+        Name = runtimeName(self, "Search"),
         PlaceholderText = "Search...",
         Text = "",
         ClearTextOnFocus = false,
@@ -460,7 +514,7 @@ local function createWindowInternal(options)
     create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 8), Parent = search })
 
     local minBtn = makeTextButton({
-        Name = "Minimize",
+        Name = runtimeName(self, "Minimize"),
         Text = "-",
         TextColor3 = theme.Text,
         Font = Enum.Font.GothamBold,
@@ -476,7 +530,7 @@ local function createWindowInternal(options)
     addCorner(minBtn, 8)
 
     local closeBtn = makeTextButton({
-        Name = "Close",
+        Name = runtimeName(self, "Close"),
         Text = "x",
         TextColor3 = theme.Text,
         Font = Enum.Font.GothamBold,
@@ -491,7 +545,7 @@ local function createWindowInternal(options)
     addCorner(closeBtn, 8)
 
     local sidebar = create("Frame", {
-        Name = "Sidebar",
+        Name = runtimeName(self, "Sidebar"),
         BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 0.55,
         Position = UDim2.fromOffset(12, 58),
@@ -516,7 +570,7 @@ local function createWindowInternal(options)
     })
 
     local pages = create("Frame", {
-        Name = "Pages",
+        Name = runtimeName(self, "Pages"),
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(168, 58),
         Size = UDim2.new(1, -180, 1, -70),
@@ -525,7 +579,7 @@ local function createWindowInternal(options)
     })
 
     local notifications = create("Frame", {
-        Name = "Notifications",
+        Name = runtimeName(self, "Notifications"),
         BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(1, 1),
         Position = UDim2.new(1, -18, 1, -18),
@@ -540,7 +594,7 @@ local function createWindowInternal(options)
     })
 
     local resizeHandle = create("Frame", {
-        Name = "ResizeHandle",
+        Name = runtimeName(self, "ResizeHandle"),
         Active = true,
         AnchorPoint = Vector2.new(1, 1),
         BackgroundColor3 = theme.Muted,
@@ -553,6 +607,17 @@ local function createWindowInternal(options)
     trackTheme(self, resizeHandle, { BackgroundColor3 = "Muted" })
     addCorner(resizeHandle, 5)
 
+    local statusBar = makeTextLabel({
+        Name = runtimeName(self, "StatusBar"),
+        Text = "VRBX-Stealth",
+        TextColor3 = theme.Muted,
+        TextSize = 11,
+        Position = UDim2.fromOffset(224, 0),
+        Size = UDim2.new(0, 150, 1, 0),
+        Parent = topbar
+    })
+    trackTheme(self, statusBar, { TextColor3 = "Muted" })
+
     self.Main = main
     self.Shadow = shadow
     self.Topbar = topbar
@@ -562,6 +627,7 @@ local function createWindowInternal(options)
     self.Notifications = notifications
     self.NotifyLayout = notifyLayout
     self.SearchBox = search
+    self.StatusBar = statusBar
 
     local function setFiltered(text)
         text = string.lower(text or "")
@@ -671,7 +737,7 @@ function Window:CreateTab(options)
     local tab = setmetatable({ Window = self, Name = options.Name or "Tab", Elements = {}, SectionMap = {}, ElementMap = {} }, Tab)
 
     local page = create("ScrollingFrame", {
-        Name = tab.Name,
+        Name = runtimeName(self, tab.Name),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Size = UDim2.fromScale(1, 1),
@@ -699,7 +765,7 @@ function Window:CreateTab(options)
     end)
 
     local button = makeTextButton({
-        Name = tab.Name .. "Button",
+        Name = runtimeName(self, tab.Name .. "Button"),
         Text = tab.Name,
         TextColor3 = theme.Muted,
         Font = Enum.Font.GothamMedium,
@@ -797,6 +863,35 @@ function Window:Toggle()
     return self:SetVisible(not self.Main.Visible)
 end
 
+function Window:SetStatus(text)
+    if self.StatusBar then
+        self.StatusBar.Text = tostring(text or "")
+    end
+end
+
+function Window:SetSearch(text)
+    self.SearchBox.Text = tostring(text or "")
+end
+
+function Window:AddUnloadButton(tab, name)
+    return tab:CreateButton({
+        Name = name or "Unload UI",
+        ButtonText = "Unload",
+        Callback = function()
+            self:Destroy()
+        end
+    })
+end
+
+function Window:SetToggleKey(key)
+    key = coerceKeyCode(key, Enum.KeyCode.RightShift)
+    bind(self.Connections, Services.UserInputService.InputBegan, function(input, processed)
+        if not processed and input.KeyCode == key then
+            self:Toggle()
+        end
+    end)
+end
+
 function Window:RegisterFlag(flag, default, setter)
     if flag then
         self.Flags[flag] = default
@@ -833,10 +928,56 @@ end
 function Window:UpdateFlag(flag, value, noAutoSave)
     if flag then
         self.Flags[flag] = value
+        if self.FlagWatchers[flag] then
+            for _, callback in ipairs(self.FlagWatchers[flag]) do
+                task.spawn(callback, value)
+            end
+        end
         if not noAutoSave then
             self:QueueAutoSave()
         end
     end
+end
+
+function Window:WatchFlag(flag, callback)
+    self.FlagWatchers[flag] = self.FlagWatchers[flag] or {}
+    table.insert(self.FlagWatchers[flag], callback)
+end
+
+function Window:BindDependency(flag, element, expected)
+    self:WatchFlag(flag, function(value)
+        local enabled = expected == nil and value or value == expected
+        if element and element.SetDisabled then
+            element:SetDisabled(not enabled)
+        elseif element and element.Visible then
+            element:Visible(enabled)
+        end
+    end)
+    local current = self.Flags[flag]
+    if current ~= nil then
+        local enabled = expected == nil and current or current == expected
+        if element and element.SetDisabled then element:SetDisabled(not enabled) end
+    end
+end
+
+function Window:ExportConfig()
+    local ok, data = pcall(Services.HttpService.JSONEncode, Services.HttpService, self.Flags)
+    return ok and data or nil
+end
+
+function Window:ImportConfig(data)
+    local ok, decoded = pcall(function()
+        return Services.HttpService:JSONDecode(tostring(data or "{}"))
+    end)
+    if not ok or type(decoded) ~= "table" then
+        return false, decoded or "Invalid config data."
+    end
+    for flag, value in pairs(decoded) do
+        if self.FlagSetters[flag] then
+            self:ApplyFlag(flag, value)
+        end
+    end
+    return true
 end
 
 function Window:ResetFlag(flag)
@@ -872,6 +1013,9 @@ function Window:DeleteConfig(name)
         return false, "File delete APIs are unavailable in this executor."
     end
     name = name or self.AutoSaveConfig or self.Name
+    if self.RandomizeConfigNames and self.ConfigSuffix and not tostring(name):find("__" .. tostring(self.ConfigSuffix), 1, true) then
+        name = tostring(name) .. "__" .. tostring(self.ConfigSuffix)
+    end
     local file = configFileName(name)
     if not isfile(file) then
         return false, "Config not found: " .. file
@@ -896,6 +1040,9 @@ function Window:SaveConfig(name, internal)
         pcall(makefolder, "VRBX")
     end
     name = name or self.Name
+    if self.RandomizeConfigNames and self.ConfigSuffix and not tostring(name):find("__" .. tostring(self.ConfigSuffix), 1, true) then
+        name = tostring(name) .. "__" .. tostring(self.ConfigSuffix)
+    end
     local file = configFileName(name)
     local ok, data = pcall(Services.HttpService.JSONEncode, Services.HttpService, self.Flags)
     if not ok then
@@ -912,7 +1059,11 @@ function Window:LoadConfig(name)
     if not readfile or not isfile then
         return false, "File APIs are unavailable in this executor."
     end
-    local file = configFileName(name or self.Name)
+    name = name or self.Name
+    if self.RandomizeConfigNames and self.ConfigSuffix and not tostring(name):find("__" .. tostring(self.ConfigSuffix), 1, true) then
+        name = tostring(name) .. "__" .. tostring(self.ConfigSuffix)
+    end
+    local file = configFileName(name)
     if not isfile(file) then
         return false, "Config not found: " .. file
     end
@@ -934,6 +1085,11 @@ end
 function Window:Notify(options)
     options = options or {}
     local theme = self.Theme
+    local notifyType = string.lower(tostring(options.Type or "info"))
+    local accent = theme.Accent
+    if notifyType == "success" then accent = Color3.fromRGB(70, 210, 130) end
+    if notifyType == "warning" then accent = Color3.fromRGB(235, 190, 80) end
+    if notifyType == "error" then accent = theme.Danger end
     local holder = create("Frame", {
         BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 0.02,
@@ -944,6 +1100,7 @@ function Window:Notify(options)
     })
     addCorner(holder, 12)
     addStroke(holder, theme.Stroke, 0.15)
+    create("Frame", { BackgroundColor3 = accent, BorderSizePixel = 0, Size = UDim2.new(0, 3, 1, 0), Parent = holder })
     makeTextLabel({
         Text = tostring(options.Title or "Notification"),
         TextColor3 = theme.Text,
@@ -974,6 +1131,48 @@ function Window:Notify(options)
     return holder
 end
 
+function Window:Confirm(options)
+    options = options or {}
+    local theme = self.Theme
+    local confirmColor = theme.Accent
+    local confirmType = string.lower(tostring(options.Type or "info"))
+    if confirmType == "warning" then confirmColor = Color3.fromRGB(235, 190, 80) end
+    if confirmType == "error" then confirmColor = theme.Danger end
+    local modal = create("Frame", {
+        BackgroundColor3 = theme.Background,
+        BackgroundTransparency = 0.05,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(300, 132),
+        ZIndex = 80,
+        Parent = self.Gui
+    })
+    trackTheme(self, modal, { BackgroundColor3 = "Background" })
+    trackTheme(self, addStroke(modal, theme.Stroke, 0.1), { Color = "Stroke" })
+    local title = makeTextLabel({ Text = tostring(options.Title or "Confirm"), TextColor3 = theme.Text, Font = Enum.Font.GothamBold, TextSize = 14, Position = UDim2.fromOffset(12, 10), Size = UDim2.new(1, -24, 0, 22), ZIndex = 81, Parent = modal })
+    trackTheme(self, title, { TextColor3 = "Text" })
+    local body = makeTextLabel({ Text = tostring(options.Content or "Are you sure?"), TextColor3 = theme.Muted, TextWrapped = true, Position = UDim2.fromOffset(12, 38), Size = UDim2.new(1, -24, 0, 42), ZIndex = 81, Parent = modal })
+    trackTheme(self, body, { TextColor3 = "Muted" })
+    local yes = makeTextButton({ Text = options.ConfirmText or "Yes", TextColor3 = theme.AccentText, TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = confirmColor, Position = UDim2.new(1, -142, 1, -38), Size = UDim2.fromOffset(62, 26), ZIndex = 81, Parent = modal })
+    local no = makeTextButton({ Text = options.CancelText or "No", TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = theme.SurfaceLight, Position = UDim2.new(1, -72, 1, -38), Size = UDim2.fromOffset(60, 26), ZIndex = 81, Parent = modal })
+    if confirmType ~= "warning" and confirmType ~= "error" then
+        trackTheme(self, yes, { BackgroundColor3 = "Accent", TextColor3 = "AccentText" })
+    end
+    trackTheme(self, no, { BackgroundColor3 = "SurfaceLight", TextColor3 = "Text" })
+    addButtonFeedback(self.Connections, yes, confirmColor, nil, nil, function() return confirmColor end)
+    addButtonFeedback(self.Connections, no, theme.SurfaceLight, nil, nil, function() return self.Theme.SurfaceLight end)
+    bind(self.Connections, yes.MouseButton1Click, function()
+        modal:Destroy()
+        runCallback(options, options.Callback, true)
+    end)
+    bind(self.Connections, no.MouseButton1Click, function()
+        modal:Destroy()
+        runCallback(options, options.Callback, false)
+    end)
+    return modal
+end
+
 function Window:Destroy()
     disconnectAll(self.Connections)
     if self.Gui then
@@ -984,13 +1183,13 @@ end
 function Tab:CreateSection(title)
     local theme = self.Window.Theme
     local holder = create("Frame", {
-        Name = "Section",
+        Name = runtimeName(self.Window, "Section"),
         BackgroundTransparency = 1,
         Size = UDim2.new(1, -16, 0, 22),
         Parent = self.Page
     })
-    makeTextLabel({
-        Name = "SectionTitle",
+    local sectionTitle = makeTextLabel({
+        Name = runtimeName(self.Window, "SectionTitle"),
         Text = tostring(title or "Section"),
         TextColor3 = theme.Accent,
         Font = Enum.Font.GothamBold,
@@ -999,10 +1198,7 @@ function Tab:CreateSection(title)
         Size = UDim2.new(1, -4, 0, 20),
         Parent = holder
     })
-    local sectionTitle = holder:FindFirstChild("SectionTitle")
-    if sectionTitle then
-        trackTheme(self.Window, sectionTitle, { TextColor3 = "Accent" })
-    end
+    trackTheme(self.Window, sectionTitle, { TextColor3 = "Accent" })
     table.insert(self.Window.Searchables, { Frame = holder, Text = string.lower(tostring(title or "section")) })
     self.SectionMap[string.lower(tostring(title or "section"))] = holder
     return elementHandle(holder)
@@ -1052,7 +1248,9 @@ function Tab:CreateButton(options)
     local flag = options.Flag or options.Name or options.Title or "Button"
     local toggleMode = options.Toggle == true or options.Stateful == true
     local state = not not options.Default
+    local handle
     local card, label = makeCard(self, self.Page, options.Name or options.Title or "Button", options.Name or options.Title or "Button", 44)
+    if options.Disabled then card.BackgroundTransparency = 0.45 end
     local function buttonColor()
         return self.Window.Theme.Accent
     end
@@ -1080,6 +1278,7 @@ function Tab:CreateButton(options)
         if not silent then runCallback(options, options.Callback, state) end
     end
     bind(self.Window.Connections, btn.MouseButton1Click, function()
+        if handle and handle.Disabled then return end
         if toggleMode then
             set(not state)
         elseif options.Callback then
@@ -1089,12 +1288,14 @@ function Tab:CreateButton(options)
     if toggleMode then
         self.Window:RegisterFlag(flag, state, set)
     end
-    return elementHandle(card, {
+    handle = elementHandle(card, {
         Button = btn,
         SetText = function(_, text) label.Text = tostring(text) end,
         Set = function(_, value) if toggleMode then set(value) end end,
         Get = function() return toggleMode and state or nil end
     })
+    if options.Disabled then handle:SetDisabled(true) end
+    return handle
 end
 
 function Tab:CreateToggle(options)
@@ -1163,16 +1364,25 @@ function Tab:CreateSlider(options)
     local value = math.clamp(options.Default or min, min, max)
     local card, label = makeCard(self, self.Page, name, name, 56)
     attachTooltip(self.Window, card, options.Tooltip)
-    local valueLabel = makeTextLabel({
+    local valueLabel = create("TextBox", {
         Text = tostring(value),
         TextColor3 = theme.Muted,
+        PlaceholderText = "",
+        ClearTextOnFocus = false,
+        Font = Enum.Font.Gotham,
+        TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Right,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        BackgroundColor3 = theme.SurfaceLight,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, -10, 0, 7),
         Size = UDim2.fromOffset(64, 18),
         Parent = card
     })
-    trackTheme(self.Window, valueLabel, { TextColor3 = "Muted" })
+    trackTheme(self.Window, valueLabel, { TextColor3 = "Muted", BackgroundColor3 = "SurfaceLight" })
     fitText(valueLabel, 9, 12)
     local bar = makeTextButton({
         Text = "",
@@ -1204,6 +1414,11 @@ function Tab:CreateSlider(options)
         return text
     end
     local function set(newValue, silent)
+        newValue = tonumber(newValue)
+        if not newValue then
+            valueLabel.Text = formatValue(value)
+            return
+        end
         value = math.clamp(round(newValue), min, max)
         local alpha = max == min and 1 or (value - min) / (max - min)
         valueLabel.Text = formatValue(value)
@@ -1211,6 +1426,19 @@ function Tab:CreateSlider(options)
         self.Window:UpdateFlag(flag, value)
         if not silent then runCallback(options, options.Callback, value) end
     end
+    bind(self.Window.Connections, valueLabel.Focused, function()
+        valueLabel.BackgroundTransparency = 0.15
+        valueLabel.Text = ""
+    end)
+    bind(self.Window.Connections, valueLabel.FocusLost, function(enterPressed)
+        valueLabel.BackgroundTransparency = 1
+        local typed = tonumber(valueLabel.Text)
+        if typed then
+            set(math.clamp(typed, min, max))
+        else
+            valueLabel.Text = formatValue(value)
+        end
+    end)
     local function fromInput(input)
         if bar.AbsoluteSize.X <= 0 then return end
         local alpha = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
