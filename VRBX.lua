@@ -104,6 +104,28 @@ local function scrambleInstanceNames(root)
     end
 end
 
+local function createDecoyInstances(parent, count, salt)
+    local decoys = {}
+    for i = 1, count do
+        local decoy = create("Frame", {
+            Name = tostring(salt or "vrbx") .. "_" .. randomToken(14),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Size = UDim2.fromOffset(0, 0),
+            Visible = false,
+            Parent = parent
+        })
+        table.insert(decoys, decoy)
+        if i % 2 == 0 then
+            create("Folder", {
+                Name = tostring(salt or "vrbx") .. "_" .. randomToken(14),
+                Parent = decoy
+            })
+        end
+    end
+    return decoys
+end
+
 local function addCorner(parent, radius)
     return nil
 end
@@ -447,11 +469,15 @@ local function createWindowInternal(options)
     options = options or {}
     local windowSettings = options.WindowSettings or {}
     local securitySettings = options.SecuritySettings or {}
+    local protectionSettings = options.ProtectionSettings or {}
     local closeSettings = options.CloseSettings or {}
     local configSettings = options.ConfigSettings or {}
     local theme = normalizeTheme(firstNonNil(options.Theme, windowSettings.Theme))
-    local nameScrambling = firstNonNil(options.RuntimeNameScrambling, options.RandomizeInstanceNames, securitySettings.RuntimeNameScrambling, securitySettings.RandomizeInstanceNames) == true
-    local nameSalt = tostring(firstNonNil(options.NameSalt, securitySettings.NameSalt, "vrbx"))
+    local nameScrambling = firstNonNil(options.RuntimeNameScrambling, options.RandomizeInstanceNames, securitySettings.RuntimeNameScrambling, securitySettings.RandomizeInstanceNames, protectionSettings.RuntimeNameScrambling, protectionSettings.RandomizeInstanceNames) == true
+    local nameSalt = tostring(firstNonNil(options.NameSalt, securitySettings.NameSalt, protectionSettings.NameSalt, "vrbx"))
+    local decoyCount = tonumber(firstNonNil(options.DecoyInstances, securitySettings.DecoyInstances, protectionSettings.DecoyInstances, 0)) or 0
+    local scrambleAfterBuild = firstNonNil(options.ScrambleAfterBuild, securitySettings.ScrambleAfterBuild, protectionSettings.ScrambleAfterBuild) == true
+    local clearLookupMaps = firstNonNil(options.ClearLookupMaps, securitySettings.ClearLookupMaps, protectionSettings.ClearLookupMaps) == true
     local gui = create("ScreenGui", {
         Name = nameScrambling and (nameSalt .. "_" .. randomToken(14)) or (firstNonNil(options.Name, windowSettings.Name) or "VRBX"),
         ResetOnSpawn = false,
@@ -471,6 +497,7 @@ local function createWindowInternal(options)
         Defaults = {},
         FlagSetters = {},
         FlagWatchers = {},
+        BooleanControls = {},
         Searchables = {},
         Connections = {},
         CurrentTab = nil,
@@ -481,6 +508,10 @@ local function createWindowInternal(options)
         TurnOffAfterDelete = firstNonNil(options.TurnOffAfterDelete, closeSettings.TurnOffAfterDelete) == true,
         NameScrambling = nameScrambling,
         NameSalt = nameSalt,
+        DecoyInstances = decoyCount,
+        ScrambleAfterBuild = scrambleAfterBuild,
+        ClearLookupMaps = clearLookupMaps,
+        Decoys = {},
         ConfigSuffix = firstNonNil(options.ConfigSuffix, configSettings.ConfigSuffix),
         RandomizeConfigNames = firstNonNil(options.RandomizeConfigNames, configSettings.RandomizeConfigNames) == true,
         AutoSaveConfig = nil,
@@ -669,6 +700,10 @@ local function createWindowInternal(options)
     trackTheme(self, resizeHandle, { BackgroundColor3 = "Muted" })
     addCorner(resizeHandle, 5)
 
+    if self.DecoyInstances > 0 then
+        self.Decoys = createDecoyInstances(gui, math.clamp(self.DecoyInstances, 1, 50), self.NameSalt)
+    end
+
     self.Main = main
     self.Shadow = shadow
     self.Topbar = topbar
@@ -766,6 +801,10 @@ local function createWindowInternal(options)
     bind(self.Connections, closeBtn.MouseButton1Click, function()
         self:RequestClose()
     end)
+
+    if self.ScrambleAfterBuild then
+        scrambleInstanceNames(gui)
+    end
 
     return self
 end
@@ -911,11 +950,32 @@ function Window:SetVisible(value)
     return visible
 end
 
+function Window:ScrambleInstanceNames()
+    if self.Gui and self.Gui.Parent then
+        scrambleInstanceNames(self.Gui)
+        return true
+    end
+    return false
+end
+
+function Window:ClearLookupMaps()
+    self.TabMap = {}
+    self.Searchables = {}
+    for _, tab in ipairs(self.Tabs) do
+        tab.SectionMap = {}
+        tab.ElementMap = {}
+    end
+    return true
+end
+
 function Window:Toggle()
     return self:SetVisible(not self.Main.Visible)
 end
 
 function Window:TurnOffBooleanFlags()
+    for _, setter in ipairs(self.BooleanControls) do
+        pcall(setter, false, true)
+    end
     for flag, value in pairs(self.Flags) do
         if value == true then
             self:SetFlag(flag, false)
@@ -1405,6 +1465,7 @@ function Tab:CreateButton(options)
     end)
     if toggleMode then
         self.Window:RegisterFlag(flag, state, set)
+        table.insert(self.Window.BooleanControls, set)
     end
     handle = elementHandle(card, {
         Button = btn,
@@ -1460,6 +1521,7 @@ function Tab:CreateToggle(options)
     end
     bind(self.Window.Connections, track.MouseButton1Click, function() set(not state) end)
     self.Window:RegisterFlag(flag, state, set)
+    table.insert(self.Window.BooleanControls, set)
     return elementHandle(card, { Set = function(_, value) set(value) end, Get = function() return state end })
 end
 
