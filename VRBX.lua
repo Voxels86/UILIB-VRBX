@@ -553,6 +553,7 @@ local function createWindowInternal(options)
         Font = Enum.Font.GothamBold,
         TextSize = 18,
         TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
         BackgroundColor3 = theme.SurfaceLight,
         BackgroundTransparency = 0.18,
         Size = UDim2.fromOffset(28, 28),
@@ -564,11 +565,12 @@ local function createWindowInternal(options)
 
     local closeBtn = makeTextButton({
         Name = runtimeName(self, "Close"),
-        Text = "x",
+        Text = "X",
         TextColor3 = theme.Text,
         Font = Enum.Font.GothamBold,
         TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
         BackgroundColor3 = theme.Danger,
         Size = UDim2.fromOffset(28, 28),
         Position = UDim2.new(1, -34, 0, 8),
@@ -919,6 +921,8 @@ function Window:RequestClose()
             Type = "warning",
             ConfirmText = "Close",
             CancelText = "Cancel",
+            BlackConfirm = true,
+            Delay = 2,
             NoErrorCallbacks = true,
             Callback = function(confirmed)
                 if confirmed then
@@ -1220,15 +1224,34 @@ function Window:Confirm(options)
     trackTheme(self, title, { TextColor3 = "Text" })
     local body = makeTextLabel({ Text = tostring(options.Content or "Are you sure?"), TextColor3 = theme.Muted, TextWrapped = true, Position = UDim2.fromOffset(12, 38), Size = UDim2.new(1, -24, 0, 42), ZIndex = 81, Parent = modal })
     trackTheme(self, body, { TextColor3 = "Muted" })
-    local yes = makeTextButton({ Text = options.ConfirmText or "Yes", TextColor3 = theme.AccentText, TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = confirmColor, Position = UDim2.new(1, -142, 1, -38), Size = UDim2.fromOffset(62, 26), ZIndex = 81, Parent = modal })
+    if options.BlackConfirm == true then
+        confirmColor = Color3.fromRGB(0, 0, 0)
+    end
+    local yes = makeTextButton({ Text = options.ConfirmText or "Yes", TextColor3 = options.BlackConfirm and Color3.fromRGB(255, 255, 255) or theme.AccentText, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center, BackgroundColor3 = confirmColor, ClipsDescendants = true, Position = UDim2.new(1, -142, 1, -38), Size = UDim2.fromOffset(62, 26), ZIndex = 81, Parent = modal })
     local no = makeTextButton({ Text = options.CancelText or "No", TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = theme.SurfaceLight, Position = UDim2.new(1, -72, 1, -38), Size = UDim2.fromOffset(60, 26), ZIndex = 81, Parent = modal })
-    if confirmType ~= "warning" and confirmType ~= "error" then
+    if confirmType ~= "warning" and confirmType ~= "error" and options.BlackConfirm ~= true then
         trackTheme(self, yes, { BackgroundColor3 = "Accent", TextColor3 = "AccentText" })
     end
     trackTheme(self, no, { BackgroundColor3 = "SurfaceLight", TextColor3 = "Text" })
     addButtonFeedback(self.Connections, yes, confirmColor, nil, nil, function() return confirmColor end)
     addButtonFeedback(self.Connections, no, theme.SurfaceLight, nil, nil, function() return self.Theme.SurfaceLight end)
+    local canConfirm = true
+    local delayTime = tonumber(options.Delay or 0) or 0
+    if delayTime > 0 then
+        canConfirm = false
+        local originalText = yes.Text
+        yes.Text = tostring(math.ceil(delayTime)) .. "s"
+        local fill = create("Frame", { BackgroundColor3 = Color3.fromRGB(255, 255, 255), BackgroundTransparency = 0.82, BorderSizePixel = 0, Size = UDim2.fromScale(0, 1), ZIndex = 82, Parent = yes })
+        tween(fill, { Size = UDim2.fromScale(1, 1) }, delayTime)
+        task.delay(delayTime, function()
+            if yes and yes.Parent then
+                canConfirm = true
+                yes.Text = originalText
+            end
+        end)
+    end
     bind(self.Connections, yes.MouseButton1Click, function()
+        if not canConfirm then return end
         modal:Destroy()
         runCallback(self, options, options.Callback, true)
     end)
