@@ -250,6 +250,13 @@ local function rightControl(props, width, height, inset)
     return props
 end
 
+local function topRightControl(props, width, height, inset, top)
+    props.AnchorPoint = Vector2.new(1, 0)
+    props.Position = UDim2.new(1, -(inset or 10), 0, top or 9)
+    props.Size = UDim2.new(0, width, 0, height)
+    return props
+end
+
 local function shade(color, amount)
     return Color3.new(
         math.clamp(color.R + amount, 0, 1),
@@ -372,11 +379,14 @@ end
 
 local function makeCard(self, parent, title, searchText, height)
     local theme = self.Window.Theme
+    local text = tostring(title or "Element")
+    local extraLines = math.max(0, math.ceil(#text / 36) - 1)
+    local cardHeight = math.max(height or 44, (height or 44) + (extraLines * 16))
     local card = create("Frame", {
         Name = runtimeName(self.Window, "ElementCard"),
         BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 0.18,
-        Size = UDim2.new(1, -16, 0, height or 44),
+        Size = UDim2.new(1, -16, 0, cardHeight),
         BorderSizePixel = 0,
         Parent = parent
     })
@@ -386,17 +396,20 @@ local function makeCard(self, parent, title, searchText, height)
 
     local label = makeTextLabel({
         Name = runtimeName(self.Window, "Title"),
-        Text = title or "Element",
+        Text = text,
         TextColor3 = theme.Text,
         TextSize = 13,
         Font = Enum.Font.GothamMedium,
-        AnchorPoint = Vector2.new(0, 0.5),
-        Size = UDim2.new(1, -148, 0, 22),
-        Position = UDim2.fromOffset(10, 22),
+        AnchorPoint = Vector2.new(0, 0),
+        TextYAlignment = Enum.TextYAlignment.Top,
+        Size = UDim2.new(1, -148, 1, -14),
+        Position = UDim2.fromOffset(10, 7),
         Parent = card
     })
     trackTheme(self.Window, label, { TextColor3 = "Text" })
     fitText(label, 10, 13)
+    label.TextScaled = false
+    label.TextWrapped = true
 
     table.insert(self.Window.Searchables, { Frame = card, Text = string.lower(searchText or title or "") })
     if title then
@@ -421,6 +434,7 @@ local function createWindowInternal(options)
     local self = setmetatable({
         Gui = gui,
         Theme = theme,
+        ThemeName = type(options.Theme) == "string" and options.Theme or "Custom",
         Tabs = {},
         TabMap = {},
         ThemeObjects = {},
@@ -555,23 +569,34 @@ local function createWindowInternal(options)
         Position = UDim2.fromOffset(12, 58),
         Size = UDim2.new(0, 144, 1, -70),
         BorderSizePixel = 0,
+        ClipsDescendants = true,
         Parent = main
     })
     trackTheme(self, sidebar, { BackgroundColor3 = "Surface" })
     addCorner(sidebar, 10)
     trackTheme(self, addStroke(sidebar, theme.Stroke, 0.55), { Color = "Stroke" })
 
+    local tabScroller = create("ScrollingFrame", {
+        Name = runtimeName(self, "TabScroller"),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(6, 6),
+        Size = UDim2.new(1, -12, 1, -12),
+        CanvasSize = UDim2.fromOffset(0, 0),
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = theme.Accent,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        Parent = sidebar
+    })
+    trackTheme(self, tabScroller, { ScrollBarImageColor3 = "Accent" })
     local tabList = create("UIListLayout", {
         Padding = UDim.new(0, 4),
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = sidebar
+        Parent = tabScroller
     })
-    create("UIPadding", {
-        PaddingTop = UDim.new(0, 6),
-        PaddingLeft = UDim.new(0, 6),
-        PaddingRight = UDim.new(0, 6),
-        Parent = sidebar
-    })
+    bind(self.Connections, tabList:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+        tabScroller.CanvasSize = UDim2.fromOffset(0, tabList.AbsoluteContentSize.Y + 4)
+    end)
 
     local pages = create("Frame", {
         Name = runtimeName(self, "Pages"),
@@ -611,27 +636,16 @@ local function createWindowInternal(options)
     trackTheme(self, resizeHandle, { BackgroundColor3 = "Muted" })
     addCorner(resizeHandle, 5)
 
-    local statusBar = makeTextLabel({
-        Name = runtimeName(self, "StatusBar"),
-        Text = "VRBX-Stealth",
-        TextColor3 = theme.Muted,
-        TextSize = 11,
-        Position = UDim2.fromOffset(224, 0),
-        Size = UDim2.new(0, 150, 1, 0),
-        Parent = topbar
-    })
-    trackTheme(self, statusBar, { TextColor3 = "Muted" })
-
     self.Main = main
     self.Shadow = shadow
     self.Topbar = topbar
     self.Sidebar = sidebar
+    self.TabScroller = tabScroller
     self.TabList = tabList
     self.Pages = pages
     self.Notifications = notifications
     self.NotifyLayout = notifyLayout
     self.SearchBox = search
-    self.StatusBar = statusBar
 
     local function setFiltered(text)
         text = string.lower(text or "")
@@ -777,7 +791,7 @@ function Window:CreateTab(options)
         BackgroundColor3 = theme.SurfaceLight,
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 32),
-        Parent = self.Sidebar
+        Parent = self.TabScroller
     })
     trackTheme(self, button, { BackgroundColor3 = "SurfaceLight" })
     addCorner(button, 8)
@@ -842,6 +856,7 @@ end
 
 function Window:SetTheme(theme)
     self.Theme = normalizeTheme(theme)
+    self.ThemeName = type(theme) == "string" and theme or "Custom"
     for _, item in ipairs(self.ThemeObjects) do
         local obj = item.Object
         if obj and obj.Parent then
@@ -868,9 +883,7 @@ function Window:Toggle()
 end
 
 function Window:SetStatus(text)
-    if self.StatusBar then
-        self.StatusBar.Text = tostring(text or "")
-    end
+    return nil
 end
 
 function Window:SetSearch(text)
@@ -1258,7 +1271,7 @@ function Tab:CreateButton(options)
     local function buttonColor()
         return self.Window.Theme.Accent
     end
-    local btn = makeTextButton(rightControl({
+    local btn = makeTextButton(topRightControl({
         Text = options.ButtonText or "Run",
         TextColor3 = theme.AccentText,
         Font = Enum.Font.GothamBold,
@@ -1266,7 +1279,7 @@ function Tab:CreateButton(options)
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = buttonColor(),
         Parent = card
-    }, 72, 26, 10))
+    }, 72, 26, 10, 9))
     trackTheme(self.Window, btn, { BackgroundColor3 = "Accent", TextColor3 = "AccentText" })
     fitText(btn, 9, 12)
     addButtonFeedback(self.Window.Connections, btn, theme.Accent, nil, nil, buttonColor)
@@ -1309,11 +1322,11 @@ function Tab:CreateToggle(options)
     local flag = options.Flag or name
     local state = not not options.Default
     local card, label = makeCard(self, self.Page, name, name, 44)
-    local track = makeTextButton(rightControl({
+    local track = makeTextButton(topRightControl({
         Text = "",
         BackgroundColor3 = state and theme.Accent or theme.SurfaceLight,
         Parent = card
-    }, 42, 22, 10))
+    }, 42, 22, 10, 11))
     attachTooltip(self.Window, card, options.Tooltip)
     trackTheme(self.Window, track, { BackgroundColor3 = state and "Accent" or "SurfaceLight" })
     addButtonFeedback(self.Window.Connections, track, state and theme.Accent or theme.SurfaceLight, nil, nil, function()
@@ -1391,7 +1404,8 @@ function Tab:CreateSlider(options)
     local bar = makeTextButton({
         Text = "",
         BackgroundColor3 = theme.SurfaceLight,
-        Position = UDim2.fromOffset(10, 35),
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 10, 1, -12),
         Size = UDim2.new(1, -20, 0, 7),
         Parent = card
     })
@@ -1806,7 +1820,7 @@ function Tab:CreateTextbox(options)
     local flag = options.Flag or name
     local card, label = makeCard(self, self.Page, name, name, 46)
     attachTooltip(self.Window, card, options.Tooltip)
-    local box = create("TextBox", rightControl({
+    local box = create("TextBox", topRightControl({
         Text = tostring(options.Default or ""),
         PlaceholderText = options.Placeholder or "Enter text...",
         ClearTextOnFocus = false,
@@ -1820,7 +1834,7 @@ function Tab:CreateTextbox(options)
         BackgroundColor3 = theme.SurfaceLight,
         BorderSizePixel = 0,
         Parent = card
-    }, 150, 28, 10))
+    }, 150, 28, 10, 9))
     trackTheme(self.Window, box, { TextColor3 = "Text", PlaceholderColor3 = "Muted", BackgroundColor3 = "SurfaceLight" })
     fitText(box, 9, 12)
     bind(self.Window.Connections, box.MouseEnter, function()
@@ -1859,13 +1873,13 @@ function Tab:CreateKeybind(options)
     local listening = false
     local card, label = makeCard(self, self.Page, name, name, 44)
     attachTooltip(self.Window, card, options.Tooltip)
-    local btn = makeTextButton(rightControl({
+    local btn = makeTextButton(topRightControl({
         Text = key.Name,
         TextColor3 = theme.Text,
         TextXAlignment = Enum.TextXAlignment.Center,
         BackgroundColor3 = theme.SurfaceLight,
         Parent = card
-    }, 104, 26, 10))
+    }, 104, 26, 10, 9))
     trackTheme(self.Window, btn, { TextColor3 = "Text", BackgroundColor3 = "SurfaceLight" })
     fitText(btn, 9, 12)
     addButtonFeedback(self.Window.Connections, btn, theme.SurfaceLight, nil, nil, function()
