@@ -410,10 +410,10 @@ local function makeCard(self, parent, title, searchText, height)
         TextColor3 = theme.Text,
         TextSize = 13,
         Font = Enum.Font.GothamMedium,
-        AnchorPoint = Vector2.new(0, 0),
-        TextYAlignment = Enum.TextYAlignment.Top,
-        Size = UDim2.new(1, -148, 1, -14),
-        Position = UDim2.fromOffset(10, 7),
+        AnchorPoint = Vector2.new(0, 0.5),
+        TextYAlignment = Enum.TextYAlignment.Center,
+        Size = UDim2.new(1, -148, 0, math.max(20, baseHeight - 14)),
+        Position = UDim2.fromOffset(10, baseHeight / 2),
         Parent = card
     })
     trackTheme(self.Window, label, { TextColor3 = "Text" })
@@ -428,6 +428,8 @@ local function makeCard(self, parent, title, searchText, height)
         local needed = math.max(baseHeight, math.ceil(bounds.Y) + 18)
         if math.abs(card.Size.Y.Offset - needed) > 1 then
             card.Size = UDim2.new(1, -16, 0, needed)
+            label.Size = UDim2.new(1, -148, 0, math.max(20, needed - 14))
+            label.Position = UDim2.fromOffset(10, needed / 2)
         end
     end
     bind(self.Window.Connections, label:GetPropertyChangedSignal("AbsoluteSize"), updateHeight)
@@ -1589,6 +1591,7 @@ function Tab:CreateDropdown(options)
     local flag = options.Flag or name
     local values = options.Options or options.Values or {}
     local value = options.Default or values[1]
+    local buttonDropdown = options.ButtonDropdown == true
     local dropdownWidth = options.Width or 180
     local rowHeight = 24
     local maxVisibleOptions = options.MaxVisibleOptions or 5
@@ -1597,7 +1600,7 @@ function Tab:CreateDropdown(options)
     attachTooltip(self.Window, card, options.Tooltip)
     label.Size = UDim2.new(1, -(dropdownWidth + 28), 0, 22)
     local btn = makeTextButton({
-        Text = tostring(value or "Select"),
+        Text = tostring(buttonDropdown and (options.ButtonText or options.Placeholder or "Select...") or (value or "Select")),
         TextColor3 = theme.Text,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Center,
@@ -1684,6 +1687,10 @@ function Tab:CreateDropdown(options)
         return point.X >= pos.X and point.X <= pos.X + size.X and point.Y >= pos.Y and point.Y <= pos.Y + size.Y
     end
     local function set(newValue, silent)
+        if buttonDropdown then
+            if not silent then runCallback(self.Window, options, options.Callback, newValue) end
+            return
+        end
         value = newValue
         btn.Text = tostring(newValue or "Select")
         self.Window:UpdateFlag(flag, value)
@@ -1799,12 +1806,14 @@ function Tab:CreateDropdown(options)
         end
         setOpen(not open)
     end)
-    self.Window:RegisterFlag(flag, value, set)
+    if not buttonDropdown then
+        self.Window:RegisterFlag(flag, value, set)
+    end
     return elementHandle(card, {
         Set = function(_, v) set(v) end,
         SetText = function(_, text) btn.Text = tostring(text or "Select...") end,
         Refresh = function(_, newValues) rebuild(newValues) end,
-        Get = function() return value end
+        Get = function() return buttonDropdown and nil or value end
     })
 end
 
